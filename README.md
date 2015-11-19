@@ -8,11 +8,11 @@ These playbooks install our suite of development tools and build servers automat
 
 Run the playbook like this:
 
-    ansible-playbook -i hosts/production atlassian-stash-server.yml
+    ansible-playbook -i hosts/production atlassian-jira-server.yml
 
 The `-i` parameter takes a name of a file within the `hosts` directory. This file contains the servers that are involved in the deployment to that environment.
 
-The above YML file would install Stash to the servers mentioned in the hosts and the version specified in `group_vars\devtools-code`.
+The above YML file would install JIRA to the servers mentioned in the hosts and the version specified in `group_vars\atlassian-jira-server-hosts`.
 
 # Updating to newer versions of the tools
 
