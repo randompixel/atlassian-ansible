@@ -1,0 +1,182 @@
+## Setup the ability to run a Atlassian Bamboo Server
+---
+# file: roles/atlassian-bamboo-server/tasks/main.yml
+
+
+### INSTALL NEW VERSION
+
+# Make Home Directory
+- name: create bamboo group
+  group: name=bamboo
+
+- name: create directory for home
+  file: path=/var/atlassian/application-data/ state=directory
+
+- name: create bamboo user
+  user:
+    name=bamboo
+    comment="Bamboo Server User"
+    shell=/bin/bash
+    group=bamboo
+    generate_ssh_key=yes
+    home={{ bamboo_home_directory }}
+    system=yes
+
+# Create Database if it doesn't exist
+- name: create bamboo database
+  mysql_db:
+    name=bamboo
+    state=present
+    encoding=utf8
+    collation=utf8_bin
+    login_host={{ mysql_host }}
+    login_port={{ mysql_port }}
+    login_user={{ mysql_root_user }}
+    login_password={{ mysql_root_password }}
+
+# Include Database User
+- name: create bamboo database user
+  mysql_user:
+    name={{ bamboo_database_user }}
+    password={{ bamboo_database_pass }}
+    host={{ ansible_fqdn }}
+    priv=bamboo.*:ALL
+    login_host={{ mysql_host }}
+    login_port={{ mysql_port }}
+    login_user={{ mysql_root_user }}
+    login_password={{ mysql_root_password }}
+
+# Download Archive
+- name: download bamboo archive installer
+  get_url:
+      url={{ bamboo_download_base }}{{ bamboo_installer_archive }}
+      dest=/tmp/{{ bamboo_installer_archive }}
+
+# Create Bamboo Releases Directory
+- name: create global releases directory
+  file: path={{ atlassian_app_releases_directory }} state=directory
+
+- name: create bamboo releases directory
+  file: path={{ bamboo_app_directory }} state=directory owner=bamboo group=bamboo
+
+# Unarchive Package
+- name: unpack bamboo archive
+  unarchive:
+      copy=no
+      owner=bamboo
+      group=bamboo
+      mode=0750
+      src=/tmp/{{ bamboo_installer_archive }}
+      dest={{ bamboo_app_directory }}
+      creates={{ bamboo_app_directory }}/atlassian-bamboo-{{ bamboo_version }}
+
+- name: set file permissions correctly
+  file: path={{ bamboo_app_directory }}/atlassian-bamboo-{{ bamboo_version }} owner=bamboo group=bamboo recurse=yes
+
+# Install MySQL Connector
+- name: create directory for mysql connector
+  file: path={{ mysql_java_connector_app_directory }} state=directory
+
+- name: download mysql connector
+  get_url:
+      url={{ mysql_java_connector_download_base }}{{ mysql_java_connector_archive }}
+      dest=/tmp/{{ mysql_java_connector_archive }}
+
+- name: extract mysql connector
+  unarchive:
+    copy=no
+    src=/tmp/{{ mysql_java_connector_archive }}
+    dest={{ mysql_java_connector_app_directory }}
+    creates={{ mysql_java_connector_app_directory }}/{{ mysql_java_connector }}/{{ mysql_java_connector_jar }}
+
+- name: move mysql connector into bamboo
+  command: cp {{ mysql_java_connector_app_directory }}{{ mysql_java_connector }}/{{ mysql_java_connector_jar }} {{ bamboo_app_directory }}atlassian-bamboo-{{ bamboo_version }}/lib/{{ mysql_java_connector_jar }}
+  args:
+    creates: "{{ bamboo_app_directory }}/atlassian-bamboo-{{ bamboo_version }}/lib/{{ mysql_java_connector_jar }}"
+
+
+### Update configuration
+
+# Change JVM settings
+- name: change JVM settings
+  replace:
+    dest={{ bamboo_app_directory }}/atlassian-bamboo-{{ bamboo_version }}/bin/setenv.sh
+    regexp="{{ item.find }}"
+    replace="{{ item.replace }}"
+  with_items:
+      - { find: 'JVM_MINIMUM_MEMORY=\"256m\"', replace: 'JVM_MINIMUM_MEMORY=\"768m\"' }
+      - { find: 'JVM_MAXIMUM_MEMORY=\"384m\"', replace: 'JVM_MAXIMUM_MEMORY=\"1024m\"' }
+
+# Use "Crowd" connector for authentication
+- name: set Bamboo to use Crowd authenticator
+  replace:
+    dest={{ bamboo_app_directory }}/atlassian-bamboo-{{ bamboo_version }}/atlassian-bamboo/WEB-INF/classes/seraph-config.xml
+    regexp='{{ item.find }}'
+    replace='{{ item.replace }}'
+  with_items:
+      - {
+            find: '\<authenticator class\=\"com.atlassian.bamboo.user.authentication.BambooAuthenticator\"\/\>',
+            replace: '<!-- <authenticator class="com.atlassian.bamboo.user.authentication.BambooAuthenticator"/> -->'
+        }
+      - {
+            find: '\<\!\-\- \<authenticator class\=\"com.atlassian.crowd.integration.seraph.v25.BambooAuthenticator\"\/\> \-\-\>',
+            replace: '<authenticator class="com.atlassian.crowd.integration.seraph.v25.BambooAuthenticator"/>'
+        }
+
+# Install Init Script
+- name: install init script
+  template:
+      src=initscript-bamboo.j2
+      dest=/etc/init.d/bamboo
+      mode=0755
+
+### FLIP CODE
+
+# Stop existing service and wait for port to clear (service module doesn't like init scripts)
+- name: stop any existing bamboo and wait for port
+  command: service bamboo stop
+- wait_for: port=8085 state=stopped
+
+# Check current directory exists
+- name: check for current symlink directory
+  file: path={{ atlassian_app_current_directory }} state=directory
+
+# Change symlink
+- name: change symlink to new version
+  file:
+      state=link
+      force=yes
+      src={{ bamboo_app_directory }}/atlassian-bamboo-{{ bamboo_version }}/
+      dest={{ atlassian_app_current_directory }}/bamboo
+      owner=bamboo
+      group=bamboo
+
+# Set to startup on boot and started
+- name: set to start on boot
+  service: name=bamboo enabled=yes state=started
+
+
+### CLEAN UP
+
+# Remove Downloaded Archive
+- name: remove downloaded archives
+  file: state=absent path={{ item.path }}
+  with_items:
+      - { path: "/tmp/{{ mysql_java_connector_archive }}" }
+      - { path: "/tmp/{{ bamboo_installer_archive }}" }
+
+# Keep only 2 releases (the current and previous)
+# Get all the directories newest first, remove the first 2 from the list (the 2 newest) and delete the rest
+- name: purge older releases
+  shell: "ls -td * | sed -e '1,2d' | xargs -r -d '\n' rm -r >> purge.log"
+  args:
+    chdir: "{{ bamboo_app_directory }}"
+
+# Install Apache Proxy file into configuration and reload Apache
+- name: Apache | Install Virtual Host File
+  template: src=bamboo.j2 dest=/etc/apache2/sites-available/bamboo.conf
+
+- name: Apache | Virtualhost add | Activate virtual host
+  command: /usr/sbin/a2ensite {{ bamboo_url_basename }} creates=/etc/apache2/sites-enabled/{{ bamboo_url_basename }}
+  notify:
+    - reload apache

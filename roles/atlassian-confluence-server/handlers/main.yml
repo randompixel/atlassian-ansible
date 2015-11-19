@@ -1,0 +1,10 @@
+---
+# file: roles/atlassian-confluence-server/handlers/main.yml
+
+# Restart Atlassian Confluence
+- name: restart confluence service
+  service: name=confluence state=restarted
+  
+# Reload Apache
+- name: reload apache
+  service: name=apache2 state=reloaded

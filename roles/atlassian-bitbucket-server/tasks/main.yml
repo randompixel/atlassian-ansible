@@ -1,0 +1,198 @@
+## Setup the ability to run a Atlassian Bitbucket Server
+---
+# file: roles/atlassian-bitbucket-server/tasks/main.yml
+
+### INSTALL NEW VERSION
+
+# Make Home Directory
+- name: create bitbucket group
+  group: name=bitbucket
+
+- name: create directory for home
+  file: path=/var/atlassian/application-data/ state=directory
+
+- name: create bitbucket user
+  user:
+    name=bitbucket
+    comment="Bitbucket Server User"
+    shell=/bin/bash
+    group=bitbucket
+    generate_ssh_key=yes
+    home={{ bitbucket_home_directory }}
+    system=yes
+
+# Create Database if it doesn't exist
+- name: create bitbucket database
+  mysql_db:
+    name=bitbucket
+    state=present
+    encoding=utf8
+    collation=utf8_bin
+    login_host={{ mysql_host }}
+    login_port={{ mysql_port }}
+    login_user={{ mysql_root_user }}
+    login_password={{ mysql_root_password }}
+
+# Include Database User
+- name: create bitbucket database user (local)
+  mysql_user:
+    name={{ bitbucket_database_user }}
+    password={{ bitbucket_database_pass }}
+    host={{ ansible_fqdn }}
+    priv=bitbucket.*:ALL
+    login_host={{ mysql_host }}
+    login_port={{ mysql_port }}
+    login_user={{ mysql_root_user }}
+    login_password={{ mysql_root_password }}
+
+- name: create bitbucket database user (all)
+  mysql_user:
+    name={{ bitbucket_database_user }}
+    password={{ bitbucket_database_pass }}
+    host=localhost
+    priv=bitbucket.*:ALL
+    login_host={{ mysql_host }}
+    login_port={{ mysql_port }}
+    login_user={{ mysql_root_user }}
+    login_password={{ mysql_root_password }}
+
+
+# Download Archive
+- name: download bitbucket archive installer
+  get_url:
+      url={{ bitbucket_download_base }}{{ bitbucket_installer_archive }}
+      dest=/tmp/{{ bitbucket_installer_archive }}
+
+# Create Bitbucket Releases Directory
+- name: create global releases directory
+  file: path={{ atlassian_app_releases_directory }} state=directory
+
+- name: create bitbucket releases directory
+  file: path={{ bitbucket_app_directory }} state=directory owner=bitbucket group=bitbucket
+
+# Unarchive Package
+- name: unpack bitbucket archive
+  unarchive:
+      copy=no
+      owner=bitbucket
+      group=bitbucket
+      mode=0750
+      src=/tmp/{{ bitbucket_installer_archive }}
+      dest={{ bitbucket_app_directory }}
+      creates={{ bitbucket_app_directory }}/atlassian-bitbucket-{{ bitbucket_version }}
+
+- name: set file permissions correctly
+  file: path={{ bitbucket_app_directory }}/atlassian-bitbucket-{{ bitbucket_version }} owner=bitbucket group=bitbucket recurse=yes
+
+# Install MySQL Connector
+- name: create directory for mysql connector
+  file: path={{ mysql_java_connector_app_directory }} state=directory
+
+- name: download mysql connector
+  get_url:
+      url={{ mysql_java_connector_download_base }}{{ mysql_java_connector_archive }}
+      dest=/tmp/{{ mysql_java_connector_archive }}
+
+- name: extract mysql connector
+  unarchive:
+    copy=no
+    src=/tmp/{{ mysql_java_connector_archive }}
+    dest={{ mysql_java_connector_app_directory }}
+    creates={{ mysql_java_connector_app_directory }}/{{ mysql_java_connector }}/{{ mysql_java_connector_jar }}
+
+- name: move mysql connector into bitbucket
+  command: cp {{ mysql_java_connector_app_directory }}{{ mysql_java_connector }}/{{ mysql_java_connector_jar }} {{ bitbucket_app_directory }}atlassian-bitbucket-{{ bitbucket_version }}/lib/{{ mysql_java_connector_jar }}
+  args:
+    creates: "{{ bitbucket_app_directory }}/atlassian-bitbucket-{{ bitbucket_version }}/lib/{{ mysql_java_connector_jar }}"
+
+
+# Update configuration
+# Create Bitbucket Releases Directory
+- name: create bitbucket config directory
+  file: path={{ bitbucket_home_directory }}/shared/ state=directory owner=bitbucket group=bitbucket
+
+- name: update bitbucket configuration
+  template:
+      src=bitbucket.config.properties.j2
+      dest={{ bitbucket_home_directory }}/shared/bitbucket.properties
+      owner=bitbucket
+      group=bitbucket
+
+# Change JVM settings
+- name: change JVM settings
+  replace:
+    dest={{ bitbucket_app_directory }}/atlassian-bitbucket-{{ bitbucket_version }}/bin/setenv.sh
+    regexp="{{ item.find }}"
+    replace="{{ item.replace }}"
+  with_items:
+      - { find: 'JVM_MINIMUM_MEMORY=\"512m\"', replace: 'JVM_MINIMUM_MEMORY=\"{{ bitbucket_min_memory }}\"' }
+      - { find: 'JVM_MAXIMUM_MEMORY=\"768m\"', replace: 'JVM_MAXIMUM_MEMORY=\"{{ bitbucket_max_memory }}\"' }
+
+- name: change umask settings
+  lineinfile:
+    dest={{ bitbucket_app_directory }}/atlassian-bitbucket-{{ bitbucket_version }}/bin/setenv.sh
+    regexp="umask u=rwx,g=r,o="
+    line="umask u=rwx,g=r,o="
+    insertafter="# umask 0027"
+
+# Install Init Script
+- name: install init script
+  template:
+      src=initscript-bitbucket.j2
+      dest=/etc/init.d/bitbucket
+      mode=0755
+
+### FLIP CODE
+
+# Stop existing service and wait for port to clear (service module doesn't like init scripts)
+- name: stop any existing bitbucket and wait for port
+  command: service bitbucket stop
+- wait_for: port=7990 state=stopped
+
+# Check current directory exists
+- name: check for current symlink directory
+  file: path={{ atlassian_app_current_directory }} state=directory
+
+# Change symlink
+- name: change symlink to new version
+  file:
+      state=link
+      force=yes
+      src={{ bitbucket_app_directory }}/atlassian-bitbucket-{{ bitbucket_version }}/
+      dest={{ atlassian_app_current_directory }}/bitbucket
+      owner=bitbucket
+      group=bitbucket
+
+# Set to startup on boot and started
+- name: set to start on boot
+  service: name=bitbucket enabled=yes state=started
+
+
+### CLEAN UP
+
+# Remove Downloaded Archive
+- name: remove downloaded archives
+  file: state=absent path={{ item.path }}
+  with_items:
+      - { path: "/tmp/{{ mysql_java_connector_archive }}" }
+      - { path: "/tmp/{{ bitbucket_installer_archive }}" }
+
+# Keep only 2 releases (the current and previous)
+# Get all the directories newest first, remove the first 2 from the list (the 2 newest) and delete the rest
+- name: purge older releases
+  shell: "ls -td * | sed -e '1,2d' | xargs -r -d '\n' rm -r >> purge.log"
+  args:
+    chdir: "{{ bitbucket_app_directory }}"
+
+# Install Apache Proxy file into configuration and reload Apache
+- name: Apache | Install Virtual Host File
+  template: src=bitbucket.j2 dest=/etc/apache2/sites-available/bitbucket.conf
+
+- name: Apache | Virtualhost add | Activate virtual host
+  command: /usr/sbin/a2ensite {{ bitbucket_url_basename }} creates=/etc/apache2/sites-enabled/{{ bitbucket_url_basename }}
+  notify:
+    - reload apache
+
+### Setup Backup routine
+- name: include Bitbucket Backup Server
+  include: backup-client.yml

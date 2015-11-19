@@ -1,0 +1,58 @@
+## List of tasks to turn into a Bamboo remote agent
+---
+
+  - name: create bamboo group
+    group: name=bamboo1
+
+  - name: create bamboo user
+    user: name=bamboo1 comment="Build Agent 1" shell=/bin/bash groups=bamboo1,www-data
+
+  - name: set correct permissions on home directory
+    file: path=/home/bamboo1/ state=directory owner=bamboo1 group=bamboo1 recurse=yes
+
+  - name: set correct permissions on home directory
+    file: path=/home/bamboo1/bamboo-agent-home state=directory owner=bamboo1 group=bamboo1
+
+  - name: make bin directory
+    file: path=/home/bamboo1/bin/ state=directory owner=bamboo1 group=bamboo1 mode=0770
+
+  - name: download bamboo remote agent
+    get_url: url={{ bamboo_url }}{{ bamboo_remote_agent_path }}{{ bamboo_remote_agent }} dest=/home/bamboo1/bin/{{ bamboo_remote_agent }}
+
+  - name: set permissions of agent JAR
+    file: path=/home/bamboo1/bin/{{ bamboo_remote_agent }} owner=bamboo1 group=bamboo1 mode=0744
+
+  - name: install basic upstart script
+    template: src=bamboo-agent.conf.j2 dest=/etc/init/bamboo-agent.conf
+
+  # Ignore SSH Host checking for Bamboo Agents - They can't answer!
+  - name: set correct permissions on ssh home directory
+    file: path=/home/bamboo1/.ssh/ state=directory owner=bamboo1 group=bamboo1 mode=0700
+
+  - name: Set SSH user config
+    file: path=/home/bamboo1/.ssh/ state=directory owner=bamboo1 group=bamboo1
+
+  - name: Set SSH user config
+    file: path=/home/bamboo1/.ssh/config state=touch owner=bamboo1 group=bamboo1 mode=0644
+
+  - name: Set SSH config in file (#1)
+    lineinfile:
+        dest=/home/bamboo1/.ssh/config
+        regexp="^StrictHostKeyChecking "
+        line="StrictHostKeyChecking no"
+
+  - name: Set SSH config in file (#2)
+    lineinfile:
+        dest=/home/bamboo1/.ssh/config
+        regexp="^UserKnownHostsFile="
+        line="UserKnownHostsFile=/dev/null"
+
+  # Create symbolic links for tab-autocompletion
+  - name: create service symlink
+    file: state=link src=/etc/init/bamboo-agent.conf dest=/etc/init.d/bamboo-agent
+
+  - name: install bamboo capabilties file
+    file: path={{ bamboo_node_capabilities }} state=touch
+
+  - name: restart bamboo agent
+    service: name=bamboo-agent state=restarted

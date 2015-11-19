@@ -1,0 +1,14 @@
+<VirtualHost *:80>
+  ServerName {{ vagrant_hostname }}
+  ErrorLog ${APACHE_LOG_DIR}/error.log
+  CustomLog ${APACHE_LOG_DIR}/access.log combined
+  
+  <Directory "/var/www/{{ vagrant_hostname }}/">
+    Options -Indexes +FollowSymLinks
+    AllowOverride all
+    Order allow,deny
+    Allow from all
+  </Directory>
+
+  DocumentRoot "/var/www/{{ vagrant_hostname }}/"
+</VirtualHost>

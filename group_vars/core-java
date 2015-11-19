@@ -1,0 +1,5 @@
+---
+# file: group_vars/core-java
+
+# Set this to a .crt filename inside core-java/files to enable certificate authorities
+ssl_certificate_authority: false

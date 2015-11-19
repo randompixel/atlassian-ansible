@@ -1,0 +1,22 @@
+# selenium-node - Node Remote Server for Selenium Grid
+#
+# Selenium is a UI Automation Testing Tool
+# Required-Start:       
+# Required-Stop:        
+
+description "Selenium UI Automation Testing"
+
+start on runlevel [2345]
+stop on runlevel [!2345]
+
+# Give up if restart occurs 10 times in 30 seconds.
+respawn limit 10 30
+
+setuid selenium
+setgid selenium
+env DISPLAY=:99
+
+
+chdir {{ selenium_home_dir }}/bin/
+exec /usr/bin/java -jar selenium-server-standalone-{{ selenium_remote_version_full }}.jar -role node -hub {{ selenium_hostname }}:{{ selenium_default_port }}/grid/register  -browser browserName=firefox,maxInstances={{ selenium_wd_firefox_instances }} -browser browserName=chrome,maxInstances={{ selenium_wd_chrome_instances }}
+respawn

@@ -1,0 +1,36 @@
+---
+# file: group_vars/atlassian-bitbucket-server-hosts
+
+######## BITBUCKET
+
+# --- UPDATE ON UPGRADE ---
+bitbucket_version: "4.1.0"
+bitbucket_installer_archive: "atlassian-bitbucket-4.1.0.tar.gz"
+# --- END UPDATE ON UPGRADE ---
+
+# Server Settings
+bitbucket_download_base: "https://www.atlassian.com/software/stash/downloads/binary/"
+bitbucket_home_directory: "/var/atlassian/application-data/bitbucket"
+bitbucket_app_directory: "/opt/atlassian/releases/bitbucket/"
+
+# Server Core Configuration
+bitbucket_database_user: "SET A DATABASE USER HERE"
+bitbucket_database_pass: "SET A DATABASE PASSWORD HERE"
+bitbucket_url_basename: "bitbucket.YOURDOMAIN.COM"
+bitbucket_min_memory: "768M" # Don't go lower than 512M
+bitbucket_max_memory: "1024M" # Don't go lower than 768M
+
+# --- UPDATE ON UPGRADE ---
+bitbucket_backup_version: "2.0.0"
+bitbucket_backup_installer_archive: "bitbucket-backup-distribution-2.0.0.zip"
+# --- END UPDATE ON UPGRADE ---
+
+# Backup Client Settings
+bitbucket_backup_user: "ADMIN"  # An active bitbucket admin user to perform the backup as
+bitbucket_backup_pass: "ADMIN"
+bitbucket_backup_path: "PATH_TO_BACKUP_TO"
+bitbucket_backup_log: "/var/log/bitbucket-backup-client.log"
+
+## Backup Client Core Configuration
+bitbucket_backup_download_base: "https://maven.atlassian.com/repository/public/com/atlassian/bitbucket/server/backup/bitbucket-backup-distribution/2.0.0/"
+bitbucket_backup_app_directory: "/opt/atlassian/releases/bitbucket-backup/"

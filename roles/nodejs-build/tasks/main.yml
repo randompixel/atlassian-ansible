@@ -1,0 +1,44 @@
+## Setup the ability to run nodejs scripts
+---
+# file: roles/nodejs-build/tasks/main.yml
+- name: install nodejs-build packages
+  apt: pkg={{ item }} state=latest
+  with_items:
+      - nodejs
+      - npm
+
+# provide node binary for compatibility with 12.04
+- name: provide node binary for compatibility with 12.04
+  apt: pkg={{ item }} state=latest
+  with_items:
+      - nodejs-legacy
+  when: "ansible_distribution_version | version_compare('14.04', '>=')"
+
+# Only currently installs on newer Ubuntu versions
+- name: install JSONlint package
+  npm: name=jsonlint global=yes state=latest
+  when: "ansible_distribution_version | version_compare('14.04', '>=')"
+
+# Output Capabilities to temporary file for use on Bamboo Agents
+- name: noting capabilities (Ubuntu >= 14.04)
+  lineinfile:
+      dest={{ bamboo_node_capabilities }}
+      regexp="{{ item.find }}"
+      line="{{ item.replace }}"
+      create=yes
+  with_items:
+      - { find: '^system.builder.node.Node.js=', replace: 'system.builder.node.Node.js=/usr/bin/nodejs' }
+      - { find: '^system.builder.node.NPM=', replace: 'system.builder.node.NPM=/usr/bin/npm' }
+      - { find: '^system.builder.command.JSONLint=', replace: 'system.builder.command.JSONLint=/usr/local/bin/jsonlint' }
+  when: "ansible_distribution_version | version_compare('14.04', '>=')"
+
+- name: noting capabilities (Ubunutu < 14.04)
+  lineinfile:
+      dest={{ bamboo_node_capabilities }}
+      regexp="{{ item.find }}"
+      line="{{ item.replace }}"
+      create=yes
+  with_items:
+      - { find: '^system.builder.node.Node.js=', replace: 'system.builder.node.Node.js=/usr/bin/node' }
+      - { find: '^system.builder.node.NPM=', replace: 'system.builder.node.NPM=/usr/bin/npm' }
+  when: "ansible_distribution_version | version_compare('14.04', '<')"

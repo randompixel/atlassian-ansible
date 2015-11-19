@@ -1,0 +1,17 @@
+## This file sets up our backup rotate/purge for Confluence
+---
+
+## Install Backup Manager Shell Script
+- name: install backup manager
+  template:
+      src=backup-manager.sh.j2
+      dest={{ confluence_home_directory }}/backup-manager.sh
+      owner=confluence
+      group=confluence
+      mode=0755
+
+### Install Crontab file
+- name: install crontab file
+  template:
+       src=cron.confluence-backup.j2
+       dest=/etc/cron.d/confluence-backup

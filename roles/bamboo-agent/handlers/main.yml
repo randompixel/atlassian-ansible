@@ -1,0 +1,6 @@
+---
+# file: roles/bamboo-agent/handlers/main.yml
+
+# Restart Bamboo Agent
+- name: restart bamboo agent
+  command: bamboo-agent restart

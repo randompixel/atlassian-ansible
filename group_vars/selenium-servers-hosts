@@ -1,0 +1,8 @@
+---
+# file: group_vars/selenium-servers-hosts
+
+selenium_remote_download_url: "http://selenium-release.storage.googleapis.com"
+selenium_remote_version: 2.48
+selenium_remote_version_full: 2.48.2
+
+selenium_default_port: 4444

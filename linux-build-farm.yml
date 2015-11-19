@@ -1,0 +1,12 @@
+## linux-build-farm.yml
+---
+## Build Agent Related
+    - include: common.yml
+    - include: nodejs-agent.yml
+    - include: php-agent.yml
+    - include: selenium-server.yml
+    - include: sonarqube-runner-agent.yml
+    - include: ansible-deployment-agent.yml
+
+#### Run this one last so it can auto-detect capabilities
+    - include: bamboo-agent.yml

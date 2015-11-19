@@ -1,0 +1,5 @@
+## YAML Template.
+---
+    - hosts: bamboo-agent-hosts
+      roles:
+          - bamboo-agent

@@ -1,0 +1,184 @@
+## Setup the ability to run a Atlassian Crowd Server
+---
+# file: roles/atlassian-crowd-server/tasks/main.yml
+
+
+### INSTALL NEW VERSION
+
+# Make Home Directory
+- name: create crowd group
+  group: name=crowd
+
+- name: create directory for home
+  file: path=/var/atlassian/application-data/ state=directory
+
+- name: create crowd user
+  user:
+    name=crowd
+    comment="Crowd Server User"
+    shell=/bin/bash
+    group=crowd
+    generate_ssh_key=yes
+    home={{ crowd_home_directory }}
+    system=yes
+
+# Create Database if it doesn't exist
+- name: create crowd database
+  mysql_db:
+    name=crowd
+    state=present
+    encoding=utf8
+    collation=utf8_bin
+    login_host={{ mysql_host }}
+    login_port={{ mysql_port }}
+    login_user={{ mysql_root_user }}
+    login_password={{ mysql_root_password }}
+
+# Include Database User
+- name: create crowd database user
+  mysql_user:
+    name={{ crowd_database_user }}
+    password={{ crowd_database_pass }}
+    host={{ ansible_fqdn }}
+    priv=crowd.*:ALL
+    login_host={{ mysql_host }}
+    login_port={{ mysql_port }}
+    login_user={{ mysql_root_user }}
+    login_password={{ mysql_root_password }}
+
+# Include Localhost Database User (because db is on the same machine as crowd. may not be needed in a future)
+- name: create crowd database user
+  mysql_user:
+    name={{ crowd_database_user }}
+    password={{ crowd_database_pass }}
+    host=localhost
+    priv=crowd.*:ALL
+    login_host={{ mysql_host }}
+    login_port={{ mysql_port }}
+    login_user={{ mysql_root_user }}
+    login_password={{ mysql_root_password }}
+
+# Download Archive
+- name: download crowd archive installer
+  get_url:
+      url={{ crowd_download_base }}{{ crowd_installer_archive }}
+      dest=/tmp/{{ crowd_installer_archive }}
+
+# Create Crowd Releases Directory
+- name: create global releases directory
+  file: path={{ atlassian_app_releases_directory }} state=directory
+
+- name: create crowd releases directory
+  file: path={{ crowd_app_directory }} state=directory owner=crowd group=crowd
+
+# Unarchive Package
+- name: unpack crowd archive
+  unarchive:
+      copy=no
+      owner=crowd
+      group=crowd
+      mode=0750
+      src=/tmp/{{ crowd_installer_archive }}
+      dest={{ crowd_app_directory }}
+      creates={{ crowd_app_directory }}/atlassian-crowd-{{ crowd_version }}
+
+- name: set file permissions correctly
+  file: path={{ crowd_app_directory }}/atlassian-crowd-{{ crowd_version }} owner=crowd group=crowd recurse=yes
+
+# Install MySQL Connector
+- name: create directory for mysql connector
+  file: path={{ mysql_java_connector_app_directory }} state=directory
+
+- name: download mysql connector
+  get_url:
+      url={{ mysql_java_connector_download_base }}{{ mysql_java_connector_archive }}
+      dest=/tmp/{{ mysql_java_connector_archive }}
+
+- name: extract mysql connector
+  unarchive:
+    copy=no
+    src=/tmp/{{ mysql_java_connector_archive }}
+    dest={{ mysql_java_connector_app_directory }}
+    creates={{ mysql_java_connector_app_directory }}/{{ mysql_java_connector }}/{{ mysql_java_connector_jar }}
+
+- name: move mysql connector into crowd
+  command: cp {{ mysql_java_connector_app_directory }}{{ mysql_java_connector }}/{{ mysql_java_connector_jar }} {{ crowd_app_directory }}atlassian-crowd-{{ crowd_version }}/apache-tomcat/lib/{{ mysql_java_connector_jar }}
+  args:
+    creates: "{{ crowd_app_directory }}/atlassian-crowd-{{ crowd_version }}/apache-tomcat/lib/{{ mysql_java_connector_jar }}"
+
+
+### Update configuration
+
+# Set Crowd home directory in properties file
+- name: set crowd home properties
+  lineinfile:
+      dest={{ crowd_app_directory }}/atlassian-crowd-{{ crowd_version }}/crowd-webapp/WEB-INF/classes/crowd-init.properties
+      insertafter="#crowd.home=/var/crowd-home"
+      line="crowd.home={{ crowd_home_directory }}"
+
+# Install Init Script
+- name: install init script
+  template:
+      src=initscript-crowd.j2
+      dest=/etc/init.d/crowd
+      mode=0755
+
+### FLIP CODE
+
+# Stop existing service and wait for port to clear (service module doesn't like init scripts)
+- name: stop any existing crowd and wait for port
+  command: service crowd stop
+- wait_for: port=8095 state=stopped
+
+# Check current directory exists
+- name: check for current symlink directory
+  file: path={{ atlassian_app_current_directory }} state=directory
+
+# Change symlink
+- name: change symlink to new version
+  file:
+      state=link
+      force=yes
+      src={{ crowd_app_directory }}/atlassian-crowd-{{ crowd_version }}/
+      dest={{ atlassian_app_current_directory }}/crowd
+      owner=crowd
+      group=crowd
+
+# Set to startup on boot and started
+- name: set to start on boot
+  service: name=crowd enabled=yes state=started
+
+
+### CLEAN UP
+
+# Remove Downloaded Archive
+- name: remove downloaded archives
+  file: state=absent path={{ item.path }}
+  with_items:
+      - { path: "/tmp/{{ mysql_java_connector_archive }}" }
+      - { path: "/tmp/{{ crowd_installer_archive }}" }
+
+# Keep only 2 releases (the current and previous)
+# Get all the directories newest first, remove the first 2 from the list (the 2 newest) and delete the rest
+- name: purge older releases
+  shell: "ls -td * | sed -e '1,2d' | xargs -r -d '\n' rm -r >> purge.log"
+  args:
+    chdir: "{{ crowd_app_directory }}"
+
+# Install Apache Proxy file into configuration and reload Apache
+- name: Apache | Install Virtual Host File
+  template: src=crowd.j2 dest=/etc/apache2/sites-available/crowd.conf
+
+- name: Apache | Make SSL Directory
+  file: path={{ crowd_ssl_directory }} state=directory
+
+- name: Apache | Install certificate files
+  copy: src={{ item.src }} dest={{ item.dest }}
+  with_items:
+      - { src: "crowd.cer", dest: "{{ crowd_ssl_directory }}/crowd.cer" }
+      - { src: "server.key", dest: "{{ crowd_ssl_directory }}/server.key" }
+
+- name: Apache | Virtualhost add | Activate virtual host
+  command: /usr/sbin/a2ensite {{ crowd_url_basename }} creates=/etc/apache2/sites-enabled/{{ crowd_url_basename }}
+  notify:
+    - reload apache

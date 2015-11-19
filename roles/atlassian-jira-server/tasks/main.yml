@@ -1,0 +1,211 @@
+## Setup the ability to run a Atlassian Jira Server
+---
+# file: roles/atlassian-jira-server/tasks/main.yml
+
+
+### INSTALL NEW VERSION
+
+# Make Home Directory
+- name: create jira group
+  group: name=jira
+
+- name: create directory for home
+  file: path=/var/atlassian/application-data/ state=directory
+
+- name: create jira user
+  user:
+    name=jira
+    comment="Jira Server User"
+    shell=/bin/bash
+    group=jira
+    generate_ssh_key=yes
+    home={{ jira_home_directory }}
+    system=yes
+
+# Create Database if it doesn't exist
+- name: create jira database
+  mysql_db:
+    name=jira
+    state=present
+    encoding=utf8
+    collation=utf8_bin
+    login_host={{ mysql_host }}
+    login_port={{ mysql_port }}
+    login_user={{ mysql_root_user }}
+    login_password={{ mysql_root_password }}
+
+# Include Database User
+- name: create jira database user
+  mysql_user:
+    name={{ jira_database_user }}
+    password={{ jira_database_pass }}
+    host={{ ansible_fqdn }}
+    priv=jira.*:ALL
+    login_host={{ mysql_host }}
+    login_port={{ mysql_port }}
+    login_user={{ mysql_root_user }}
+    login_password={{ mysql_root_password }}
+
+# Include Localhost Database User (because db is on the same machine as jira. may not be needed in a future)
+- name: create jira database user
+  mysql_user:
+    name={{ jira_database_user }}
+    password={{ jira_database_pass }}
+    host=localhost
+    priv=jira.*:ALL
+    login_host={{ mysql_host }}
+    login_port={{ mysql_port }}
+    login_user={{ mysql_root_user }}
+    login_password={{ mysql_root_password }}
+
+# Download Archive
+- name: download jira archive installer
+  get_url:
+      url={{ jira_download_base }}{{ jira_installer_archive }}
+      dest=/tmp/{{ jira_installer_archive }}
+
+# Create Jira Releases Directory
+- name: create global releases directory
+  file: path={{ atlassian_app_releases_directory }} state=directory
+
+- name: create jira releases directory
+  file: path={{ jira_app_directory }} state=directory owner=jira group=jira
+
+# Unarchive Package
+- name: unpack jira archive
+  unarchive:
+      copy=no
+      owner=jira
+      group=jira
+      mode=0750
+      src=/tmp/{{ jira_installer_archive }}
+      dest={{ jira_app_directory }}
+      creates={{ jira_app_directory }}/atlassian-jira-{{ jira_version }}
+
+# Change stupid directory name...
+- name: rename jira directory
+  command: mv {{ jira_app_directory }}/atlassian-jira-software-{{ jira_version }}-standalone/  {{ jira_app_directory }}/atlassian-jira-{{ jira_version }}
+  args:
+    creates: "{{ jira_app_directory }}/atlassian-jira-{{ jira_version }}"
+
+
+- name: set file permissions correctly
+  file: path={{ jira_app_directory }}/atlassian-jira-{{ jira_version }} owner=jira group=jira recurse=yes
+
+# Install MySQL Connector
+- name: create directory for mysql connector
+  file: path={{ mysql_java_connector_app_directory }} state=directory
+
+- name: download mysql connector
+  get_url:
+      url={{ mysql_java_connector_download_base }}{{ mysql_java_connector_archive }}
+      dest=/tmp/{{ mysql_java_connector_archive }}
+
+- name: extract mysql connector
+  unarchive:
+    copy=no
+    src=/tmp/{{ mysql_java_connector_archive }}
+    dest={{ mysql_java_connector_app_directory }}
+    creates={{ mysql_java_connector_app_directory }}/{{ mysql_java_connector }}/{{ mysql_java_connector_jar }}
+
+- name: move mysql connector into jira
+  command: cp {{ mysql_java_connector_app_directory }}{{ mysql_java_connector }}/{{ mysql_java_connector_jar }} {{ jira_app_directory }}atlassian-jira-{{ jira_version }}/lib/{{ mysql_java_connector_jar }}
+  args:
+    creates: "{{ jira_app_directory }}/atlassian-jira-{{ jira_version }}/lib/{{ mysql_java_connector_jar }}"
+
+
+### Update configuration
+
+# Set database configuration
+- name: install database settings
+  template:
+      src=dbconfig.xml.j2
+      dest={{ jira_home_directory }}/dbconfig.xml
+
+# Change JVM settings
+- name: change JVM settings
+  replace:
+    dest={{ jira_app_directory }}/atlassian-jira-{{ jira_version }}/bin/setenv.sh
+    regexp="{{ item.find }}"
+    replace="{{ item.replace }}"
+  with_items:
+      - { find: 'JVM_MINIMUM_MEMORY=\"384m\"', replace: 'JVM_MINIMUM_MEMORY=\"768m\"' }
+      - { find: 'JVM_MAXIMUM_MEMORY=\"768m\"', replace: 'JVM_MAXIMUM_MEMORY=\"1280m\"' }
+
+# Install Crowd properties file for authenticating against Crowd
+- name: install jira crowd integration
+  template:
+      src=crowd.properties.j2
+      dest={{ jira_app_directory }}/atlassian-jira-{{ jira_version }}/atlassian-jira/WEB-INF/classes/crowd.properties
+
+# Update JIRA config to use crowd authenticator
+- name: disable jira crowd integration
+  replace:
+    dest={{ jira_app_directory }}/atlassian-jira-{{ jira_version }}/atlassian-jira/WEB-INF/classes/seraph-config.xml
+    regexp='\<authenticator class\=\"com.atlassian.jira.security.login.JiraSeraphAuthenticator\"\/\>'
+    replace=''
+
+- name: enable jira crowd integration
+  lineinfile:
+    dest={{ jira_app_directory }}/atlassian-jira-{{ jira_version }}/atlassian-jira/WEB-INF/classes/seraph-config.xml
+    regexp="\<\!\-\- \<authenticator class\=\"com.atlassian.jira.security.login.SSOSeraphAuthenticator\"\/\> \-\-\>"
+    line="<authenticator class=\"com.atlassian.jira.security.login.SSOSeraphAuthenticator\"/>"
+    insertbefore="\<\!\-\- CROWD\:END \-\-\>"
+
+# Install Init Script
+- name: install init script
+  template:
+      src=initscript-jira.j2
+      dest=/etc/init.d/jira
+      mode=0755
+
+### FLIP CODE
+
+# Stop existing service and wait for port to clear (service module doesn't like init scripts)
+- name: stop any existing jira and wait for port
+  command: service jira stop
+- wait_for: port=8080 state=stopped
+
+# Check current directory exists
+- name: check for current symlink directory
+  file: path={{ atlassian_app_current_directory }} state=directory
+
+# Change symlink
+- name: change symlink to new version
+  file:
+      state=link
+      force=yes
+      src={{ jira_app_directory }}/atlassian-jira-{{ jira_version }}/
+      dest={{ atlassian_app_current_directory }}/jira
+      owner=jira
+      group=jira
+
+# Set to startup on boot and started
+- name: set to start on boot
+  service: name=jira enabled=yes state=started
+
+
+### CLEAN UP
+
+# Remove Downloaded Archive
+- name: remove downloaded archives
+  file: state=absent path={{ item.path }}
+  with_items:
+      - { path: "/tmp/{{ mysql_java_connector_archive }}" }
+      - { path: "/tmp/{{ jira_installer_archive }}" }
+
+# Keep only 2 releases (the current and previous)
+# Get all the directories newest first, remove the first 2 from the list (the 2 newest) and delete the rest
+- name: purge older releases
+  shell: "ls -td * | sed -e '1,2d' | xargs -r -d '\n' rm -r >> purge.log"
+  args:
+    chdir: "{{ jira_app_directory }}"
+
+# Install Apache Proxy file into configuration and reload Apache
+- name: Apache | Install Virtual Host File
+  template: src=jira.j2 dest=/etc/apache2/sites-available/jira.conf
+
+- name: Apache | Virtualhost add | Activate virtual host
+  command: /usr/sbin/a2ensite {{ jira_url_basename }} creates=/etc/apache2/sites-enabled/{{ jira_url_basename }}
+  notify:
+    - reload apache

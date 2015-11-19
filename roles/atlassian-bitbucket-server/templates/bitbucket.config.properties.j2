@@ -1,0 +1,14 @@
+jdbc.driver=com.mysql.jdbc.Driver
+jdbc.url=jdbc:mysql://{{ mysql_host }}:{{ mysql_port }}/bitbucket?autoReconnect=true&characterEncoding=utf8&useUnicode=true&sessionVariables=storage_engine%3DInnoDB
+jdbc.user={{ bitbucket_database_user }}
+jdbc.password={{ bitbucket_database_pass }}
+
+# These lines work with the Confluence Gravitar Plugin, for providing Avatars across all Atlassian products
+# If you do not wish to use this plugin in Confluence, then please remove these lines.
+avatar.url.format.http={{ url_confluence }}/rest/cas/1.0/avatar/server/%1$s
+avatar.url.format.https={{ url_confluence }}/rest/cas/1.0/avatar/server/%1$s
+
+# Whether SSO support should be enabled or not. Regardless of this setting SSO authentication
+# will only be activated when a Crowd directory is configured in Bitbucket that is configured
+# for SSO.
+plugin.auth-crowd.sso.enabled=true

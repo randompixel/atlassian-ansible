@@ -1,0 +1,6 @@
+## atlassian-jira-server
+## Runs tasks to setup a Jira instance
+---
+    - hosts: atlassian-jira-server-hosts
+      roles:
+          - atlassian-jira-server

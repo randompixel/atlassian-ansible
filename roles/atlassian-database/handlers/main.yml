@@ -1,0 +1,6 @@
+---
+# file: roles/atlassian-database/handlers/main.yml
+
+# Restart Percona DB
+- name: restart percona database
+  service: name=mysql state=restarted

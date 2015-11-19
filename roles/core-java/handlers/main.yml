@@ -1,0 +1,6 @@
+---
+# file: roles/common/handlers/main.yml
+
+# Reconfigure ca-certificates to pick up changes
+- name: reconfigure ca-certificates
+  command: update-ca-certificates

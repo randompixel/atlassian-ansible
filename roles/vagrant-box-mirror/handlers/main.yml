@@ -1,0 +1,6 @@
+---
+# file: roles/vagrant-box-mirror/handlers/main.yml
+  
+# Reload Apache
+- name: reload apache
+  service: name=apache2 state=reloaded

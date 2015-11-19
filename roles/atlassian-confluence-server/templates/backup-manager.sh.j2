@@ -1,0 +1,12 @@
+#!/bin/bash
+
+# This file purges any old backups, then copies them to remote storage
+
+# Keep one file a week if older than 7 days
+find {{ confluence_home_directory }}/{{ confluence_backup_source_directory }} -type f -mtime +7 -exec sh -c 'test $(date +%u -r "$1") = 1 || rm "$1"' -- {} \;
+
+# Purge anything older than 2 months
+find {{ confluence_home_directory }}/{{ confluence_backup_source_directory }} -type f -mtime +60 -exec rm {} \;
+
+# Sync backup files to remote location
+rsync -azh --delete {{ confluence_home_directory }}/{{ confluence_backup_source_directory }} {{ confluence_backup_destination_directory }}

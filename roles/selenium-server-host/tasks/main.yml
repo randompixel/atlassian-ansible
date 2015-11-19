@@ -1,0 +1,48 @@
+## List of tasks to create a selenium host
+---
+# Create Group
+- name: create selenium group
+  group: name=selenium
+  
+# Create User
+- name: create selenium user
+  user: name=selenium comment="Selenium Server Host" shell=/bin/bash groups=selenium,www-data
+  
+- name: get home directory
+  command: echo ~
+  sudo: yes
+  sudo_user: selenium
+  register: selenium_home_dir_info
+  
+- name: reassign variables
+  set_fact: 
+    selenium_home_dir: "{{selenium_home_dir_info.stdout}}"
+  
+# Create /bin Directory
+- name: make bin directory
+  file: path={{ selenium_home_dir }}/bin/ state=directory owner=selenium group=selenium mode=0770
+  
+# Download Server
+- name: download selenium remote server
+  get_url: url={{ selenium_remote_download_url }}/{{ selenium_remote_version }}/selenium-server-standalone-{{ selenium_remote_version_full }}.jar dest={{ selenium_home_dir }}/bin/selenium-server-standalone-{{ selenium_remote_version_full }}.jar
+
+# Set +x permissions
+- name: set permissions of agent JAR
+  file: path={{ selenium_home_dir }}/bin/selenium-server-standalone-{{ selenium_remote_version_full }}.jar owner=selenium group=selenium mode=0744
+
+# Add Path for Selenium
+- name: add path rules for selenium user
+  template: src=selenium-path.sh.j2 dest=/etc/profile.d/selenium.sh mode=0744
+
+# Install Upstart routine
+- name: install basic upstart script
+  template: src=selenium-host.conf.j2 dest=/etc/init/selenium-host.conf
+  
+  # Create symbolic links for tab-autocompletion
+- name: create service symlink
+  file: state=link src=/etc/init/selenium-host.conf dest=/etc/init.d/selenium-host
+
+# Start Service
+- name: restart selenium host
+  service: name=selenium-host state=restarted
+  

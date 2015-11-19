@@ -1,0 +1,6 @@
+## atlassian-bamboo-server.yml
+## Runs tasks to setup a Bamboo instance
+---
+    - hosts: atlassian-bamboo-server-hosts
+      roles:
+          - atlassian-bamboo-server

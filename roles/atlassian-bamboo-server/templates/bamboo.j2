@@ -1,0 +1,13 @@
+<VirtualHost *:80>
+  ServerName {{ bamboo_url_basename }}
+  ErrorLog ${APACHE_LOG_DIR}/error.log
+  CustomLog ${APACHE_LOG_DIR}/access.log combined
+  <Proxy *>
+      Order deny,allow
+      Allow from all
+  </Proxy>
+  ProxyRequests         Off
+  ProxyPreserveHost     On
+  ProxyPass             /    http://localhost:8085/
+  ProxyPassReverse      /    http://localhost:8085/
+</VirtualHost>

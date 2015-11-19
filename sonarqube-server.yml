@@ -1,0 +1,6 @@
+## YAML Template.
+## Runs tasks to setup a SonarQube server
+---
+    - hosts: sonarqube-server
+      roles: 
+          - sonarqube-server

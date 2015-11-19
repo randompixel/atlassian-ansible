@@ -1,0 +1,17 @@
+---
+# file: group_vars/atlassian-bamboo-server-hosts
+
+######## BAMBOO
+
+# --- UPDATE ON UPGRADE ---
+bamboo_version: "5.9.7"
+bamboo_installer_archive: "atlassian-bamboo-5.9.7.tar.gz"
+# --- END UPDATE ON UPGRADE ---
+
+## These should only be set once
+bamboo_download_base: "https://www.atlassian.com/software/bamboo/downloads/binary/"
+bamboo_home_directory: "/var/atlassian/application-data/bamboo"
+bamboo_app_directory: "/opt/atlassian/releases/bamboo/"
+bamboo_database_user: "SET A DATABASE USER HERE"
+bamboo_database_pass: "SET A DATABASE PASSWORD HERE"
+bamboo_url_basename: "bamboo.YOURDOMAIN.COM"

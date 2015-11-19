@@ -1,0 +1,6 @@
+## atlassian-confluence-server
+## Runs tasks to setup a Confluence instance
+---
+    - hosts: atlassian-confluence-server-hosts
+      roles:
+          - atlassian-confluence-server

@@ -1,0 +1,10 @@
+---
+# file: roles/atlassian-crowd-server/handlers/main.yml
+
+# Restart Atlassian Crowd
+- name: restart crowd service
+  service: name=crowd state=restarted
+  
+# Reload Apache
+- name: reload apache
+  service: name=apache2 state=reloaded

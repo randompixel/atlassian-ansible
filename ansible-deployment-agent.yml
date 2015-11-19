@@ -1,0 +1,6 @@
+## ansible-deployment-agent.yml
+## Runs tasks to setup a Ansible Deployment Node
+---
+    - hosts: ansible-deployment-agents
+      roles:
+          - ansible-deployment-agent

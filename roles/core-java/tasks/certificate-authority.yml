@@ -1,0 +1,15 @@
+## Add a certificate authority where required
+---
+# file: roles/common/tasks/certificate-authority.yml
+
+- name: setup world first certificate authority
+  copy: src={{ ssl_certificate_authority }}  dest=/usr/local/share/ca-certificates/{{ ssl_certificate_authority }} backup=yes mode=644
+  notify: reconfigure ca-certificates
+
+- name: check for Java certificates
+  shell: keytool -printcert -file /usr/local/share/ca-certificates/{{ ssl_certificate_authority }} | grep "Owner"
+  register: java_certificates
+
+- name: update Java certificate store
+  command: keytool -import -alias serverCert -file /usr/local/share/ca-certificates/{{ ssl_certificate_authority }} -keystore /usr/lib/jvm/java-8-oracle/jre/lib/security/cacerts -storepass changeit
+  when: java_certificates.stdout == ""

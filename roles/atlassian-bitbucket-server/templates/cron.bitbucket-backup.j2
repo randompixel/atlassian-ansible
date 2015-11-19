@@ -1,0 +1,9 @@
+# Run the Bitbucket Backup Client every morning, sending the backup to the NAS
+
+0 4 * * * root /usr/bin/java -noverify -Dbitbucket.user="{{ bitbucket_backup_user }}" -Dbitbucket.password="{{ bitbucket_backup_pass }}" -Dbitbucket.baseUrl="http://{{ bitbucket_url_basename }}/" -Dbitbucket.home={{ bitbucket_home_directory }} -Dbackup.home={{ bitbucket_backup_path }} -jar {{ bitbucket_backup_app_directory }}/bitbucket-backup-client-{{ bitbucket_backup_version }}/bitbucket-backup-client.jar > {{ bitbucket_backup_log }}
+
+
+
+
+## END OF BITBUCKET BACKUP CRON - PERSIST NEW LINE HERE ##
+

@@ -1,0 +1,23 @@
+---
+# file: group_vars/atlassian-confluence-server-hosts
+
+######## CONFLUENCE
+
+# --- UPDATE ON UPGRADE ---
+confluence_version: "5.8.16"
+confluence_installer_archive: "atlassian-confluence-5.8.15.tar.gz"
+# --- END UPDATE ON UPGRADE ---
+
+# Server Settings
+confluence_download_base: "https://www.atlassian.com/software/confluence/downloads/binary/"
+confluence_home_directory: "/var/atlassian/application-data/confluence"
+confluence_app_directory: "/opt/atlassian/releases/confluence/"
+
+# Server Core Configuration
+confluence_database_user: "SET A DATABASE USER HERE"
+confluence_database_pass: "SET A DATABASE PASSWORD HERE"
+confluence_url_basename: "confluence.YOURDOMAIN.COM"
+
+# Backup Client Settings
+confluence_backup_source_directory: "backups"
+confluence_backup_destination_directory: "SET A BACKUP PATH HERE"

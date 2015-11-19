@@ -1,0 +1,46 @@
+## List of common tasks for a build server
+---
+# file: roles/core-java/tasks/main.yml
+  - name: Add multiverse repository
+    apt_repository: repo="{{item}}"
+    with_items:
+     - "deb http://archive.ubuntu.com/ubuntu {{ansible_distribution_release}} multiverse"
+    tags: add-apt-repo
+
+  ### Core server functionality
+  - name: add webupd8 ppa for Oracle Java packages
+    apt_repository: repo='ppa:webupd8team/java'
+
+  # Oracle Java sucks. Using "present" as it seems to install fine once automatically, but subsequent times give
+  # "sha256sum mismatch jdk-8u31-linux-x64.tar.gz" errors. I feel this is to do with accepting the licence again, but
+  # not 100% sure.
+
+  - name: accept Oracle licences
+    debconf: name='oracle-java8-installer' question='shared/accepted-oracle-license-v1-1' value='true' vtype='select'
+
+  - name: install Java
+    apt: pkg=oracle-java8-installer state=present update-cache=yes force=yes
+
+  - name: install standard pre-requisites
+    apt: pkg={{ item }} state=latest update-cache=yes force=yes
+    with_items:
+      - chkrootkit
+      - cronolog
+      - git
+      - htop
+      - libtcnative-1
+      - locate
+      - nscd
+      - ssh-askpass
+      - python-mysqldb
+      - rsync
+      - tree
+      - unzip
+      - zip
+
+  - name: add certificate authority where required
+    include: certificate-authority.yml
+    when: ssl_certificate_authority != 'false'
+
+  - name: reset temporary capabilities file
+    file: path=/tmp/bamboo-capabilities.properties state=absent

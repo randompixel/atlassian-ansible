@@ -1,0 +1,20 @@
+---
+# file: group_vars/atlassian-crowd-server-hosts
+
+######## CROWD
+
+# --- UPDATE ON UPGRADE ---
+crowd_version: "2.8.3"
+crowd_installer_archive: "atlassian-crowd-2.8.3.tar.gz"
+# --- END UPDATE ON UPGRADE ---
+
+# Server Settings
+crowd_download_base: "https://www.atlassian.com/software/crowd/downloads/binary/"
+crowd_home_directory: "/var/atlassian/application-data/crowd"
+crowd_app_directory: "/opt/atlassian/releases/crowd/"
+crowd_ssl_directory: "/etc/apache2/ssl/atlassian/"
+
+# Server Core Configuration
+crowd_database_user: "SET A DATABASE USER HERE"
+crowd_database_pass: "SET A DATABASE PASSWORD HERE"
+crowd_url_basename: "crowd.YOURDOMAIN.COM"

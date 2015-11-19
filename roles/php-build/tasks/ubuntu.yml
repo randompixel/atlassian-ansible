@@ -1,0 +1,57 @@
+## Specific commands for Ubuntu 14.04LTS and newer
+---
+- debug: msg = "Running commands for Ubuntu 14.04LTS"
+
+###### PHP APC #########
+# Enable PHP-APC
+- name: install APC (user-cache)
+  apt: pkg=php5-apcu state=latest
+
+###### PHP OAUTH #########
+# Enable PHP OAuth
+- name: install OAuth via APT
+  apt: pkg=php5-oauth state=latest
+
+- name: fetch oauth version
+  shell: 'apt show php5-oauth | grep "^Version" | awk "{print $2}" | grep -o -P "\d*\.\d*\.\d*"'
+  register: oauth_version
+
+- name: set oauth version in capabilities
+  lineinfile:
+      dest={{ bamboo_node_capabilities }}
+      regexp="^PHP_OAUTH="
+      line='PHP_OAUTH={{ oauth_version.stdout }}'
+
+###### PHP INTL #########
+# Install PECL Intl
+- name: install Pecl Intl
+  apt: pkg=php5-intl state=latest
+
+# Note Intl Capabilities
+- name: fetch intl version
+  shell: apt show php5-intl | grep "^Version" | awk '{print $2}' | grep -o -P "\d*\.\d*\.\d*"
+  register: intl_version
+
+- name: set intl version in capabilities
+  lineinfile:
+      dest={{ bamboo_node_capabilities }}
+      regexp="^PHP_INTL="
+      line='PHP_INTL={{ intl_version.stdout }}'
+
+###### PHP MCRYPT #########
+# Enable PHP mcyrpt extension
+- name: enable PHP5 mcrypt
+  command: php5enmod mcrypt
+
+# Note mcyrpt Capabilities
+- name: fetch mcyrpt version
+  shell: apt show php5-mcrypt | grep "^Version" | awk '{print $2}' | grep -o -P "\d*\.\d*\.\d*"
+  register: mcyrpt_version
+
+- name: set mcyrpt version in capabilities
+  lineinfile:
+      dest={{ bamboo_node_capabilities }}
+      regexp="^PHP_MCRYPT="
+      line='PHP_MCRYPT={{ mcyrpt_version.stdout }}'
+
+

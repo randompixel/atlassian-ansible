@@ -1,0 +1,6 @@
+## YAML Template.
+## Runs tasks to setup a database for Atlassian tools
+---
+    - hosts: proxy-servers
+      roles: 
+          - atlassian-proxy

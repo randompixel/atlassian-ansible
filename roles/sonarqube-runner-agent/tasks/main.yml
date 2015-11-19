@@ -1,0 +1,119 @@
+## Setup the ability to run a SonarQube Runner Agent
+---
+# file: roles/sonarqube-runner-agent/tasks/main.yml
+
+
+### INSTALL NEW VERSION
+
+# Download Archive
+- name: download sonarqube archive installer
+  get_url:
+      url={{ sonarqube_download_base }}{{ sonarqube_installer_archive }}
+      dest=/tmp/{{ sonarqube_installer_archive }}
+
+# Create Sonarqube Releases Directory
+- name: create global releases directory
+  file: path={{ codehaus_app_releases_directory }} state=directory
+
+- name: create sonarqube releases directory
+  file: path={{ sonarqube_app_directory }} state=directory
+
+# Unarchive Package
+- name: unpack sonarqube archive
+  unarchive:
+    copy=no
+    src=/tmp/{{ sonarqube_installer_archive }}
+    dest={{ sonarqube_app_directory }}
+    creates={{ sonarqube_app_directory }}/sonar-runner-{{ sonarqube_version }}
+
+# Create Database if it doesn't exist
+- name: create sonarqube database
+  mysql_db:
+    name=sonarqube
+    state=present
+    encoding=utf8
+    collation=utf8_bin
+    login_host={{ mysql_host }}
+    login_port={{ mysql_port }}
+    login_user={{ mysql_root_user }}
+    login_password={{ mysql_root_password }}
+
+# Include Database User
+- name: create sonarqube database user
+  mysql_user:
+    name={{ sonarqube_database_user }}
+    password={{ sonarqube_database_pass }}
+    host={{ ansible_fqdn }}
+    priv=sonarqube.*:ALL
+    login_host={{ mysql_host }}
+    login_port={{ mysql_port }}
+    login_user={{ mysql_root_user }}
+    login_password={{ mysql_root_password }}
+
+### UPDATE CONFIGURATION
+
+# Change Sonarqube Configuration file
+- name: change sonarqube settings
+  lineinfile:
+    dest={{ sonarqube_app_directory }}/sonar-runner-{{ sonarqube_version }}/conf/sonar-runner.properties
+    regexp="{{ item.find }}"
+    line="{{ item.replace }}"
+    insertafter="{{ item.after }}"
+  with_items:
+      - {
+            find: '^sonar.host.url=http://{{ sonarqube_url_basename }}',
+            replace: 'sonar.host.url=http://{{ sonarqube_url_basename }}',
+            after: '^#sonar.host.url=http://localhost:9000'
+        }
+
+- name: create new environment variable for sonarqube-runner
+  lineinfile:
+      dest=/etc/environment
+      line="SONAR_RUNNER_HOME={{ codehaus_app_current_directory }}/sonarqube-runner/"
+      regexp="SONAR_RUNNER_HOME={{ codehaus_app_current_directory }}/sonarqube-runner/"
+
+# Update PATH for sonarqube-runner (based on https://coderwall.com/p/ynvi0q/updating-path-with-ansible-system-wide)
+- name: update PATH for sonarqube-runner
+  lineinfile:
+      dest=/etc/environment
+      backrefs=yes
+      regexp='PATH=(["]*)((?!.*?{{ codehaus_app_current_directory }}/sonarqube-runner/bin).*?)(["]*)$'
+      line="PATH=\1\2:{{ codehaus_app_current_directory }}/sonarqube-runner/bin\3"
+
+### FLIP CODE
+
+# Check current directory exists
+- name: check for current symlink directory
+  file: path={{ codehaus_app_current_directory }} state=directory
+
+# Change symlink
+- name: change symlink to new version
+  file:
+      state=link
+      force=yes
+      src={{ sonarqube_app_directory }}/sonar-runner-{{ sonarqube_version }}/
+      dest={{ codehaus_app_current_directory }}/sonarqube-runner
+
+
+# Output Capabilities to temporary file for use on Bamboo Agents
+- name: noting capabilities
+  lineinfile:
+      dest={{ bamboo_node_capabilities }}
+      regexp="^system.builder.sor.SonarRunner="
+      line="system.builder.sor.SonarRunner={{ codehaus_app_current_directory }}/sonarqube-runner/"
+      create=yes
+
+### CLEAN UP
+
+# Remove Downloaded Archive
+- name: remove downloaded archives
+  file: state=absent path={{ item.path }}
+  with_items:
+      - { path: "/tmp/{{ sonarqube_installer_archive }}" }
+
+# Keep only 2 releases (the current and previous)
+# Get all the directories newest first, remove the first 2 from the list (the 2 newest) and delete the rest
+- name: purge older releases
+  shell: "ls -td * | sed -e '1,2d' | xargs -r -d '\n' rm -r >> purge.log"
+  args:
+    chdir: "{{ sonarqube_app_directory }}"

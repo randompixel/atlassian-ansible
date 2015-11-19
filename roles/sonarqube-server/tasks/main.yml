@@ -1,0 +1,193 @@
+## Setup the ability to run a SonarQube Server
+---
+# file: roles/sonarqube-server/tasks/main.yml
+
+
+### INSTALL NEW VERSION
+
+# Make Home Directory
+- name: create sonarqube group
+  group: name=sonarqube
+
+- name: create directory for home
+  file: path=/var/codehaus/application-data/ state=directory
+
+- name: create sonarqube user
+  user:
+    name=sonarqube
+    comment="Sonarqube Server User"
+    shell=/bin/bash
+    group=sonarqube
+    generate_ssh_key=yes
+    home={{ sonarqube_home_directory }}
+    system=yes
+
+# Create Database if it doesn't exist
+- name: create sonarqube database
+  mysql_db:
+    name=sonarqube
+    state=present
+    encoding=utf8
+    collation=utf8_bin
+    login_host={{ mysql_host }}
+    login_port={{ mysql_port }}
+    login_user={{ mysql_root_user }}
+    login_password={{ mysql_root_password }}
+
+# Include Database User
+- name: create sonarqube database user
+  mysql_user:
+    name={{ sonarqube_database_user }}
+    password={{ sonarqube_database_pass }}
+    host={{ ansible_fqdn }}
+    priv=sonarqube.*:ALL
+    login_host={{ mysql_host }}
+    login_port={{ mysql_port }}
+    login_user={{ mysql_root_user }}
+    login_password={{ mysql_root_password }}
+
+# Download Archive
+- name: download sonarqube archive installer
+  get_url:
+      url={{ sonarqube_download_base }}{{ sonarqube_installer_archive }}
+      dest=/tmp/{{ sonarqube_installer_archive }}
+
+# Create Sonarqube Releases Directory
+- name: create global releases directory
+  file: path={{ codehaus_app_releases_directory }} state=directory
+
+- name: create sonarqube releases directory
+  file: path={{ sonarqube_app_directory }} state=directory owner=sonarqube group=sonarqube
+
+# Unarchive Package
+- name: unpack sonarqube archive
+  unarchive:
+      copy=no
+      owner=sonarqube
+      group=sonarqube
+      mode=0750
+      src=/tmp/{{ sonarqube_installer_archive }}
+      dest={{ sonarqube_app_directory }}
+      creates={{ sonarqube_app_directory }}/sonarqube-{{ sonarqube_version }}
+
+- name: set file permissions correctly
+  file: path={{ sonarqube_app_directory }}/sonarqube-{{ sonarqube_version }} owner=sonarqube group=sonarqube recurse=yes
+
+# Make sure we copy over any plugins from the current installations
+- name: check for existing plugin directory
+  stat: path={{ codehaus_app_current_directory }}/sonarqube/extensions/plugins
+  register: st
+
+- name: copy existing plugins if they already exist
+  command: cp -v {{ codehaus_app_current_directory }}/sonarqube/extensions/plugins/* {{ sonarqube_app_directory }}/sonarqube-{{ sonarqube_version }}/extensions/plugins/.
+  when: st.stat.isdir is defined and st.stat.isdir and st.stat
+
+# Download Crowd Plugin to allow Authenticated Start-Up
+- name: download crowd plugin
+  get_url:
+      url={{ sonarqube_crowd_plugin_url }}
+      dest={{ sonarqube_app_directory }}/sonarqube-{{ sonarqube_version }}/extensions/plugins/
+
+
+
+### Update configuration
+
+# Change Sonarqube Configuration file
+- name: change sonarqube settings
+  lineinfile:
+    dest={{ sonarqube_app_directory }}/sonarqube-{{ sonarqube_version }}/conf/sonar.properties
+    regexp="{{ item.find }}"
+    line="{{ item.replace }}"
+    insertafter="{{ item.after }}"
+  with_items:
+      - {
+            find: '^sonar.web.javaOpts',
+            replace: 'sonar.web.javaOpts=-Xmx1024m -XX:+HeapDumpOnOutOfMemoryError',
+            after: '^#sonar.web.javaOpts'
+        }
+      - {
+            find: '^sonar.jdbc.url=jdbc:mysql',
+            replace: 'sonar.jdbc.url=jdbc:mysql://{{ mysql_host }}:{{ mysql_port }}/sonarqube?useUnicode=true&characterEncoding=utf8&rewriteBatchedStatements=true&useConfigs=maxPerformance',
+            after: '^#sonar.jdbc.url=jdbc:mysql'
+        }
+      - {
+            find: '^sonar.jdbc.username=',
+            replace: 'sonar.jdbc.username={{ sonarqube_database_user }}',
+            after: '^#sonar.jdbc.username=sonar'
+        }
+      - {
+            find: '^sonar.jdbc.password=',
+            replace: 'sonar.jdbc.password={{ sonarqube_database_pass }}',
+            after: '^#sonar.jdbc.password=sonar'
+        }
+
+# Configure authentication. These items should be setup within the Crowd application first to allow authentication.
+- name: configure authentication
+  lineinfile:
+      dest={{ sonarqube_app_directory }}/sonarqube-{{ sonarqube_version }}/conf/sonar.properties
+      regexp="{{ item.find }}"
+      line="{{ item.replace }}"
+  with_items:
+        - { find: '^crowd.url=', replace: 'crowd.url=http://{{ crowd_url_basename }}:8095/crowd' }
+        - { find: '^crowd.application=', replace: 'crowd.application={{ sonarqube_crowd_application }}' }
+        - { find: '^crowd.password', replace: 'crowd.password={{ sonarqube_crowd_password }}' }
+        - { find: '^sonar.security.realm=', replace: 'sonar.security.realm={{ sonarqube_crowd_realm }}' }
+        - { find: '^sonar.authenticator.createUsers=', replace: 'sonar.authenticator.createUsers=true' }
+
+
+# Install Init Script
+- name: install init script
+  template:
+      src=initscript-sonarqube.j2
+      dest=/etc/init.d/sonarqube
+      mode=0755
+
+### FLIP CODE
+
+# Stop existing service and wait for port to clear (service module doesn't like init scripts)
+- name: stop any existing sonarqube and wait for port
+  command: service sonarqube stop
+- wait_for: port=9000 state=stopped
+
+# Check current directory exists
+- name: check for current symlink directory
+  file: path={{ codehaus_app_current_directory }} state=directory
+
+# Change symlink
+- name: change symlink to new version
+  file:
+      state=link
+      force=yes
+      src={{ sonarqube_app_directory }}/sonarqube-{{ sonarqube_version }}/
+      dest={{ codehaus_app_current_directory }}/sonarqube
+      owner=sonarqube
+      group=sonarqube
+
+# Set to startup on boot and started
+- name: set to start on boot
+  service: name=sonarqube enabled=yes state=started
+
+
+### CLEAN UP
+
+# Remove Downloaded Archive
+- name: remove downloaded archives
+  file: state=absent path={{ item.path }}
+  with_items:
+      - { path: "/tmp/{{ sonarqube_installer_archive }}" }
+
+# Keep only 2 releases (the current and previous)
+# Get all the directories newest first, remove the first 2 from the list (the 2 newest) and delete the rest
+- name: purge older releases
+  shell: ls -t | sed -e '1,2d' | xargs -r -d '\n' rm -r >> purge.log
+  args:
+    chdir: "{{ sonarqube_app_directory }}"
+
+# Install Apache Proxy file into configuration and reload Apache
+- name: Apache | Install Virtual Host File
+  template: src=sonarqube.j2 dest=/etc/apache2/sites-available/sonarqube.conf
+
+- name: Apache | Virtualhost add | Activate virtual host
+  command: /usr/sbin/a2ensite {{ sonarqube_url_basename }} creates=/etc/apache2/sites-enabled/{{ sonarqube_url_basename }}
+  notify:
+    - reload apache

@@ -1,0 +1,20 @@
+---
+# file: group_vars/selenium-servers-nodes
+
+selenium_remote_download_url: "http://selenium-release.storage.googleapis.com"
+selenium_remote_version: 2.48
+selenium_remote_version_full: 2.48.2
+
+selenium_wd_firefox_instances: 3
+
+selenium_wd_chrome_url: "http://chromedriver.storage.googleapis.com"
+selenium_wd_chrome_version: 2.20
+selenium_wd_chrome_instances: 3
+
+selenium_wd_ie_url: "http://selenium-release.storage.googleapis.com"
+selenium_wd_ie_version: 2.48.0
+
+selenium_hostname: "http://YOUR_SELENIUM_HOST_URL"
+selenium_default_port: 4444
+
+xvfb_display: 99

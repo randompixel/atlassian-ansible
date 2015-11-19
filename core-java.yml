@@ -1,0 +1,5 @@
+## Runs the set of core OS related tasks
+---
+    - hosts: all
+      roles:
+          - core-java

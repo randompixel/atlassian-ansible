@@ -1,0 +1,11 @@
+---
+# file: group_vars/sonarqube-runner-agents
+
+######## SONARQUBE-RUNNER
+
+sonarqube_version: "2.4"
+sonarqube_installer_archive: "sonar-runner-dist-2.4.zip"
+
+sonarqube_download_base: "http://repo1.maven.org/maven2/org/codehaus/sonar/runner/sonar-runner-dist/2.4/"
+sonarqube_app_directory: "/opt/codehaus/releases/sonarqube-runner"
+sonarqube_url_basename: "sonarqube.YOURDOMAIN.COM"

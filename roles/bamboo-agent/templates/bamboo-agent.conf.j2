@@ -1,0 +1,18 @@
+# bamboo-agent - Continuous Integration tool
+#
+# Bamboo is a Continuous Integration tool.
+# Required-Start:       
+# Required-Stop:        
+
+description "Bamboo continuous integration agent"
+
+start on runlevel [2345]
+stop on runlevel [!2345]
+
+# Give up if restart occurs 10 times in 30 seconds.
+respawn limit 10 30
+
+chdir /home/bamboo1/bin/
+
+exec sudo -u bamboo1 /usr/bin/java -jar {{ bamboo_remote_agent }}  {{ bamboo_url }}{{ bamboo_remote_agent_server }}
+respawn

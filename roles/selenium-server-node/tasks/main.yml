@@ -1,0 +1,117 @@
+## List of tasks to create a selenium node
+---
+# Create Group
+- name: create selenium group
+  group: name=selenium
+
+# Create User
+- name: create selenium user
+  user: name=selenium comment="Selenium Server Host" shell=/bin/bash groups=selenium,www-data
+
+- name: get home directory
+  command: echo ~
+  sudo: yes
+  sudo_user: selenium
+  register: selenium_home_dir_info
+
+- name: reassign variables
+  set_fact:
+    selenium_home_dir: "{{selenium_home_dir_info.stdout}}"
+
+# Create /bin Directory
+- name: make bin directory
+  file: path={{ selenium_home_dir }}/bin/ state=directory owner=selenium group=selenium mode=0770
+
+# Install Browsers - Chrome
+- name: Does the Google apt file exist?
+  command: test -f /etc/apt/sources.list.d/google-chrome.list
+  register: google_apt_exists
+  ignore_errors: True
+
+- name: Add Google Chrome key
+  shell: wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add -
+  when: google_apt_exists.rc == 1
+
+- name: Add Google Chrome repo
+  copy: content="deb http://dl.google.com/linux/chrome/deb/ stable main" dest=/etc/apt/sources.list.d/google-chrome.list owner=root group=root mode=644
+  when: google_apt_exists.rc == 1
+
+- name: Update apt cache
+  apt: update_cache=yes
+  when: google_apt_exists.rc == 1
+
+- name: Install Google Chrome
+  apt: pkg=google-chrome-stable state=latest update_cache=yes
+
+# Install Browsers - Firefox
+- name: Install Firefox
+  apt: pkg=firefox state=latest
+
+# Install X - Virtual Frame Buffer to pretend we have a monitor running
+- name: Install XVFB
+  apt: pkg=xvfb state=latest
+
+# Install VNC server for viewing Xvfb
+- name: Install VNC Server
+  apt: pkg=x11vnc state=latest
+
+# Download Server
+- name: download selenium server node
+  get_url: url={{ selenium_remote_download_url }}/{{ selenium_remote_version }}/selenium-server-standalone-{{ selenium_remote_version_full }}.jar dest={{ selenium_home_dir }}/bin/selenium-server-standalone-{{ selenium_remote_version_full }}.jar
+
+# Download Remote Drivers
+- name: download chrome remote drivers
+  get_url: url={{ selenium_wd_chrome_url }}/{{ selenium_wd_chrome_version }}/chromedriver_linux64.zip dest={{ selenium_home_dir }}/chromedriver_linux64.zip
+
+- name: set permissions on remote drivers
+  file: path={{ selenium_home_dir }}/chromedriver_linux64.zip owner=selenium group=selenium mode=0744
+
+- name: extract the chrome remote drivers
+  unarchive: copy=no src={{ selenium_home_dir }}/chromedriver_linux64.zip dest={{ selenium_home_dir }}/bin owner=selenium group=selenium mode=0744
+
+# Set +x permissions
+- name: set permissions of agent JAR
+  file: path={{ selenium_home_dir }}/bin/selenium-server-standalone-{{ selenium_remote_version_full }}.jar owner=selenium group=selenium mode=0744
+
+- name: set permissions of chrome webdriver
+  file: path={{ selenium_home_dir }}/bin/chromedriver owner=selenium group=selenium mode=0744
+
+# Add XVFB DISPLAY variable
+- name: create new environment variable for selenium server xvfb
+  lineinfile:
+      dest=/etc/environment
+      line="DISPLAY=: {{ xvfb_display }}"
+      regexp="^DISPLAY\=\: {{ xvfb_display }}"
+
+# Update PATH for selenium server (based on https://coderwall.com/p/ynvi0q/updating-path-with-ansible-system-wide)
+- name: update PATH for sonarqube-runner
+  lineinfile:
+      dest=/etc/environment
+      backrefs=yes
+      regexp='PATH=(["]*)((?!.*?{{ selenium_home_dir }}/bin/).*?)(["]*)$'
+      line="PATH=\1\2:{{ selenium_home_dir }}/bin/\3"
+
+# Create Virtual Framebuffer for headless mode
+- name: add Virtual Framebuffer init script
+  template: src=xvfb.conf.j2 dest=/etc/init/xvfbd.conf mode=0755
+
+# Create symbolic links for tab-autocompletion
+- name: create service symlink
+  file: state=link src=/etc/init/xvfbd.conf dest=/etc/init.d/xvfbd
+
+# Start Service
+- name: restart xvfbd node
+  service: name=xvfbd state=restarted
+
+# Install Upstart routine
+- name: install basic upstart script
+  template: src=selenium-node.conf.j2 dest=/etc/init/selenium-node.conf
+
+# Create symbolic links for tab-autocompletion
+- name: create service symlink
+  file: state=link src=/etc/init/selenium-node.conf dest=/etc/init.d/selenium-node
+
+## Start Service
+- name: stop selenium node
+  service: name=selenium-node state=restarted
+

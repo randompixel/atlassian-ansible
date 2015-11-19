@@ -1,0 +1,35 @@
+---
+# file: group_vars/all
+
+# Mysql Database
+mysql_host: "databasehost.yourdomain.com"
+mysql_port: "3306"
+mysql_root_user: "ansible"
+mysql_root_password: "SET_A_ROOT_PASSWORD!!!"  # This should be populated.
+
+# Mysql Java Connector
+mysql_java_connector: "mysql-connector-java-5.1.34"
+mysql_java_connector_jar: "mysql-connector-java-5.1.34-bin.jar"
+mysql_java_connector_archive: "mysql-connector-java-5.1.34.tar.gz"
+mysql_java_connector_download_base: "http://dev.mysql.com/get/Downloads/Connector-J/"
+mysql_java_connector_app_directory: "/opt/atlassian/releases/mysql-connector/"
+
+# Atlassian Global Settings
+atlassian_app_current_directory: "/opt/atlassian/current"
+atlassian_app_releases_directory: "/opt/atlassian/releases"
+
+# Codehaus Global Settings
+codehaus_app_current_directory: "/opt/codehaus/current"
+codehaus_app_releases_directory: "/opt/codehaus/releases"
+
+# Bamboo Capability Files
+bamboo_host_capabilities: "/var/atlassian/application-data/bamboo/bamboo-capabilities.properties"
+bamboo_node_capabilities: "/home/bamboo1/bamboo-agent-home/bin/bamboo-capabilities.properties"
+
+# Base URLS
+url_jira: "http://jira.yourdomain.com/"
+url_confluence: "http://confluence.yourdomain.com/"
+url_stash: "http://stash.yourdomain.com/"
+url_bamboo: "http://bamboo.yourdomain.com/"
+url_crowd: "http://crowd.yourdomain.com/"
+url_sonarqube: "http://sonarqube.yourdomain.com/"

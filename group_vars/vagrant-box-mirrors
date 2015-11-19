@@ -1,0 +1,6 @@
+---
+# file: group_vars/vagrant-box-mirrors
+
+vagrant_catalog_github_url: "https://github.com/vube/vagrant-catalog"
+vagrant_hostname: "vagrantboxes.YOURDOMAIN.COM"
+vagrant_directory: "boxes"

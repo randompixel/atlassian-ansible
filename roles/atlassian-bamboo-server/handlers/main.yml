@@ -1,0 +1,10 @@
+---
+# file: roles/atlassian-bamboo-server/handlers/main.yml
+
+# Restart Atlassian Bamboo
+- name: restart bamboo service
+  service: name=bamboo state=restarted
+  
+# Reload Apache
+- name: reload apache
+  service: name=apache2 state=reloaded

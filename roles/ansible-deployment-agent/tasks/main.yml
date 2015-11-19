@@ -1,0 +1,38 @@
+## Setup the ability to run ansible from the server
+---
+# file: roles/ansible-deployment-agent/tasks/main.yml
+- name: setup ansible ppa
+  apt_repository: repo='ppa:ansible/ansible' state=present update_cache=yes
+
+- name: install ansible
+  apt: pkg={{ item }} state=latest
+  with_items:
+      - ansible
+
+- name: get ansible version installed
+  shell: ansible --version | grep "^ansible" | awk '{print $2}' | grep -o -P "\d*\.\d*\.\d*"
+  register: ansible_version
+
+# Output Capabilities to temporary file for use on Bamboo Servers
+- name: noting capabilities
+  lineinfile:
+      dest={{ bamboo_host_capabilities }}
+      regexp="{{ item.find }}"
+      line="{{ item.replace }}"
+      create=yes
+  with_items:
+      - { find: '^system.builder.command.ansible-playbook=', replace: 'system.builder.command.ansible-playbook=/usr/bin/ansible-playbook' }
+      - { find: '^Ansible=', replace: 'Ansible={{ ansible_version.stdout }}' }
+  when: "'atlassian-bamboo-server-hosts' in group_names"
+
+# Output Capabilities to temporary file for use on Bamboo Agents
+- name: noting capabilities
+  lineinfile:
+      dest={{ bamboo_host_capabilities }}
+      regexp="{{ item.find }}"
+      line="{{ item.replace }}"
+      create=yes
+  with_items:
+      - { find: '^system.builder.command.ansible-playbook=', replace: 'system.builder.command.ansible-playbook=/usr/bin/ansible-playbook' }
+      - { find: '^Ansible=', replace: 'Ansible={{ ansible_version.stdout }}' }
+  when: "'linux-build-farm' in group_names"

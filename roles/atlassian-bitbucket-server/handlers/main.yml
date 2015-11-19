@@ -1,0 +1,10 @@
+---
+# file: roles/atlassian-bitbucket-server/handlers/main.yml
+
+# Restart Atlassian Bitbucket
+- name: restart bitbucket service
+  service: name=bitbucket state=restarted
+
+# Reload Apache
+- name: reload apache
+  service: name=apache2 state=reloaded

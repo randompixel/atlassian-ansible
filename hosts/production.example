@@ -1,0 +1,107 @@
+# file: hosts/production.example
+
+# RENAME THIS FILE TO production AND SET ACTUAL HOSTS TO RUN AGAINST.
+# BY DEFAULT THIS SETS UP:
+# - BUILD BOXES WITH BAMBOO AGENTS, SONARRUNNER & SELENIUM NODES
+# - A CODE SERVER WITH BITBUCKET, BAMBOO, SONARQUBE and SELENIUM HOST
+# - A MANAGEMENT SERVER WITH JIRA, CONFLUENCE and CROWD
+
+################################################################
+### BUILD AGENT RELATED
+
+# Build Servers that run builds and Selenium Browsers
+[linux-build-farm-large]
+# High powered build servers that can support running mulitple instances
+buildbox1.yourdomain.com ansible_ssh_user=root ansible_ssh_port=22
+
+# Build Servers that run builds only
+[linux-build-farm-medium]
+# Lower powered build servers that should only run a single Bamboo agent
+buildbox2.yourdomain.com ansible_ssh_user=root ansible_ssh_port=22
+
+
+
+
+
+# Group all types of build servers
+[linux-build-farm:children]
+linux-build-farm-large
+linux-build-farm-medium
+
+# Runs Bamboo Agents
+[bamboo-agent-hosts:children]
+linux-build-farm
+
+# Capable of running PHP builds
+[php-build-agents:children]
+linux-build-farm
+
+# Capable of running NodeJS builds
+[nodejs-build-agents:children]
+linux-build-farm
+
+# Capable of running SonarQube Runner
+[sonarqube-runner-agents:children]
+linux-build-farm
+
+# Capable of running Selenium nodes
+[selenium-servers-nodes:children]
+linux-build-farm-large
+
+# Capable of deploying code with Ansible
+[ansible-deployment-agents:children]
+linux-build-farm
+
+################################################################
+### SERVER TOOL RELATED
+[devtools-management]
+admintools.yourdomain.com ansible_ssh_user=root ansible_ssh_port=22
+
+[devtools-code]
+codetools.yourdomain.com ansible_ssh_user=root ansible_ssh_port=22
+
+
+
+
+
+
+# Runs a Bamboo Server
+[atlassian-bamboo-server-hosts:children]
+devtools-code
+
+# Runs a Crowd Server
+[atlassian-crowd-server-hosts:children]
+devtools-management
+
+# Runs a Confluence Server
+[atlassian-confluence-server-hosts:children]
+devtools-management
+
+# Runs a Jira Server
+[atlassian-jira-server-hosts:children]
+devtools-management
+
+# Runs a Bitbucket Server
+[atlassian-bitbucket-server-hosts:children]
+devtools-code
+
+# Runs a Selenium Grid host
+[selenium-servers-hosts:children]
+devtools-code
+
+# Runs a Satis Mirror
+[satis-mirrors:children]
+devtools-code
+
+# Runs a Vagrantbox Mirror
+[vagrant-box-mirrors:children]
+devtools-code
+
+# Runs an Apache Proxy to map urls to ports
+[proxy-servers:children]
+devtools-code
+devtools-management
+
+# Runs a SonarQube server
+[sonarqube-server:children]
+devtools-code

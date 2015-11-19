@@ -1,0 +1,19 @@
+---
+# file: group_vars/atlassian-jira-server-hosts
+
+######## JIRA
+
+# --- UPDATE ON UPGRADE ---
+jira_version: "7.0.2"
+jira_installer_archive: "atlassian-jira-software-7.0.2-jira-7.0.2.tar.gz"
+# --- END UPDATE ON UPGRADE ---
+
+# Server Settings
+jira_download_base: "https://www.atlassian.com/software/jira/downloads/binary/"
+jira_home_directory: "/var/atlassian/application-data/jira"
+jira_app_directory: "/opt/atlassian/releases/jira/"
+
+# Server Core Configuration
+jira_database_user: "SET A DATABASE USER HERE"
+jira_database_pass: "SET A DATABASE PASSWORD HERE"
+jira_url_basename: "jira.YOURDOMAIN.COM"

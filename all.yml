@@ -1,0 +1,19 @@
+## Sets up a standard build farm server
+---
+    - include: core-java.yml
+
+    ## Server Services
+    - include: atlassian-proxy.yml
+    - include: atlassian-database.yml
+    - include: ansible-deployment-agent.yml
+    - include: atlassian-bamboo-server.yml
+    - include: atlassian-confluence-server.yml
+    - include: atlassian-crowd-server.yml
+    - include: atlassian-jira-server.yml
+    - include: atlassian-stash-server.yml
+    - include: sonarqube-server.yml
+    - include: satis-mirrors.yml
+    - include: vagrant-box-mirror.yml
+
+    ## Remote build nodes
+    - include: linux-build-farm.yml

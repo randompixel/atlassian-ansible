@@ -1,0 +1,15 @@
+## Setup the ability to run a proxy in front of the Atlassian tools
+---
+# file: roles/atlassian-proxy/tasks/main.yml
+
+ - name: Install Apache Web Server
+   apt: pkg={{ item }} state=latest update_cache=yes
+   with_items:
+      - apache2
+      
+ - name: Enable mod_proxy_http
+   apache2_module: state=present name={{ item }}
+   with_items:
+       - proxy_http
+       - rewrite
+       - ssl

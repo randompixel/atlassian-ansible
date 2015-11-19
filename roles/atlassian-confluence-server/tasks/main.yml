@@ -1,0 +1,209 @@
+## Setup the ability to run a Atlassian Confluence Server
+---
+# file: roles/atlassian-confluence-server/tasks/main.yml
+
+
+### INSTALL NEW VERSION
+
+# Make Home Directory
+- name: create confluence group
+  group: name=confluence
+
+- name: create directory for home
+  file: path=/var/atlassian/application-data/ state=directory
+
+- name: create confluence user
+  user:
+    name=confluence
+    comment="Confluence Server User"
+    shell=/bin/bash
+    group=confluence
+    generate_ssh_key=yes
+    home={{ confluence_home_directory }}
+    system=yes
+
+# Create Database if it doesn't exist
+- name: create confluence database
+  mysql_db:
+    name=confluence
+    state=present
+    encoding=utf8
+    collation=utf8_bin
+    login_host={{ mysql_host }}
+    login_port={{ mysql_port }}
+    login_user={{ mysql_root_user }}
+    login_password={{ mysql_root_password }}
+
+# Include Database User
+- name: create confluence database user
+  mysql_user:
+    name={{ confluence_database_user }}
+    password={{ confluence_database_pass }}
+    host={{ ansible_fqdn }}
+    priv=confluence.*:ALL
+    login_host={{ mysql_host }}
+    login_port={{ mysql_port }}
+    login_user={{ mysql_root_user }}
+    login_password={{ mysql_root_password }}
+
+# Include Localhost Database User (because db is on the same machine as confluence. may not be needed in a future)
+- name: create confluence database user
+  mysql_user:
+    name={{ confluence_database_user }}
+    password={{ confluence_database_pass }}
+    host=localhost
+    priv=confluence.*:ALL
+    login_host={{ mysql_host }}
+    login_port={{ mysql_port }}
+    login_user={{ mysql_root_user }}
+    login_password={{ mysql_root_password }}
+
+# Download Archive
+- name: download confluence archive installer
+  get_url:
+      url={{ confluence_download_base }}{{ confluence_installer_archive }}
+      dest=/tmp/{{ confluence_installer_archive }}
+
+# Create Confluence Releases Directory
+- name: create global releases directory
+  file: path={{ atlassian_app_releases_directory }} state=directory
+
+- name: create confluence releases directory
+  file: path={{ confluence_app_directory }} state=directory owner=confluence group=confluence
+
+# Unarchive Package
+- name: unpack confluence archive
+  unarchive:
+      copy=no
+      owner=confluence
+      group=confluence
+      mode=0750
+      src=/tmp/{{ confluence_installer_archive }}
+      dest={{ confluence_app_directory }}
+      creates={{ confluence_app_directory }}/atlassian-confluence-{{ confluence_version }}
+
+- name: set file permissions correctly
+  file: path={{ confluence_app_directory }}/atlassian-confluence-{{ confluence_version }} owner=confluence group=confluence recurse=yes
+
+# Install MySQL Connector
+- name: create directory for mysql connector
+  file: path={{ mysql_java_connector_app_directory }} state=directory
+
+- name: download mysql connector
+  get_url:
+      url={{ mysql_java_connector_download_base }}{{ mysql_java_connector_archive }}
+      dest=/tmp/{{ mysql_java_connector_archive }}
+
+- name: extract mysql connector
+  unarchive:
+    copy=no
+    src=/tmp/{{ mysql_java_connector_archive }}
+    dest={{ mysql_java_connector_app_directory }}
+    creates={{ mysql_java_connector_app_directory }}/{{ mysql_java_connector }}/{{ mysql_java_connector_jar }}
+
+- name: move mysql connector into confluence
+  command: cp {{ mysql_java_connector_app_directory }}{{ mysql_java_connector }}/{{ mysql_java_connector_jar }} {{ confluence_app_directory }}atlassian-confluence-{{ confluence_version }}/lib/{{ mysql_java_connector_jar }}
+  args:
+    creates: "{{ confluence_app_directory }}/atlassian-confluence-{{ confluence_version }}/lib/{{ mysql_java_connector_jar }}"
+
+
+### Update configuration
+
+# Set Confluence home directory in properties file
+- name: set confluence home properties
+  lineinfile:
+      dest={{ confluence_app_directory }}/atlassian-confluence-{{ confluence_version }}/confluence/WEB-INF/classes/confluence-init.properties
+      line="confluence.home={{ confluence_home_directory }}"
+      regexp=^confluence.home=
+
+# Change JVM settings
+- name: change JVM settings
+  replace:
+    dest={{ confluence_app_directory }}/atlassian-confluence-{{ confluence_version }}/bin/setenv.sh
+    regexp="{{ item.find }}"
+    replace="{{ item.replace }}"
+  with_items:
+      - { find: 'Xms=\"256m\"', replace: 'Xms=\"512m\"' }
+      - { find: 'Xmx=\"512m\"', replace: 'Xmx=\"1024m\"' }
+
+# Install Crowd properties file for authenticating against Crowd
+- name: install new confluence crowd integration
+  template:
+      src=crowd.properties.j2
+      dest={{ confluence_app_directory }}/atlassian-confluence-{{ confluence_version }}/confluence/WEB-INF/classes/crowd.properties
+
+# Update JIRA config to use crowd authenticator
+- name: disable confluence jira user directories
+  replace:
+    dest={{ confluence_app_directory }}/atlassian-confluence-{{ confluence_version }}/confluence/WEB-INF/classes/seraph-config.xml
+    regexp='\<authenticator class\=\"com.atlassian.confluence.user.ConfluenceAuthenticator\"\/\>'
+    replace=''
+
+- name: enable confluence crowd integration
+  lineinfile:
+    dest={{ confluence_app_directory }}/atlassian-confluence-{{ confluence_version }}/confluence/WEB-INF/classes/seraph-config.xml
+    regexp="\<\!\-\- \<authenticator class\=\"com.atlassian.confluence.user.ConfluenceCrowdSSOAuthenticator\"\/\> \-\-\>"
+    line="<authenticator class=\"com.atlassian.confluence.user.ConfluenceCrowdSSOAuthenticator\"/>"
+    insertbefore="\<services\>"
+
+# Install Init Script
+- name: install init script
+  template:
+      src=initscript-confluence.j2
+      dest=/etc/init.d/confluence
+      mode=0755
+
+### FLIP CODE
+
+# Stop existing service and wait for port to clear (service module doesn't like init scripts)
+- name: stop any existing confluence and wait for port
+  command: service confluence stop
+- wait_for: port=8090 state=stopped
+
+# Check current directory exists
+- name: check for current symlink directory
+  file: path={{ atlassian_app_current_directory }} state=directory
+
+# Change symlink
+- name: change symlink to new version
+  file:
+      state=link
+      force=yes
+      src={{ confluence_app_directory }}/atlassian-confluence-{{ confluence_version }}/
+      dest={{ atlassian_app_current_directory }}/confluence
+      owner=confluence
+      group=confluence
+
+# Set to startup on boot and started
+- name: set to start on boot
+  service: name=confluence enabled=yes state=started
+
+
+### CLEAN UP
+
+# Remove Downloaded Archive
+- name: remove downloaded archives
+  file: state=absent path={{ item.path }}
+  with_items:
+      - { path: "/tmp/{{ mysql_java_connector_archive }}" }
+      - { path: "/tmp/{{ confluence_installer_archive }}" }
+
+# Keep only 2 releases (the current and previous)
+# Get all the directories newest first, remove the first 2 from the list (the 2 newest) and delete the rest
+- name: purge older releases
+  shell: "ls -td * | sed -e '1,2d' | xargs -r -d '\n' rm -r >> purge.log"
+  args:
+    chdir: "{{ confluence_app_directory }}"
+
+# Install Apache Proxy file into configuration and reload Apache
+- name: Apache | Install Virtual Host File
+  template: src=confluence.j2 dest=/etc/apache2/sites-available/confluence.conf
+
+- name: Apache | Virtualhost add | Activate virtual host
+  command: /usr/sbin/a2ensite {{ confluence_url_basename }} creates=/etc/apache2/sites-enabled/{{ confluence_url_basename }}
+  notify:
+    - reload apache
+
+### Run Backup Configuration
+- name: install Confluence Backup Management
+  include: confluence-backup.yml

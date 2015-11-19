@@ -1,0 +1,10 @@
+---
+# file: roles/atlassian-jira-server/handlers/main.yml
+
+# Restart Atlassian Jira
+- name: restart jira service
+  service: name=jira state=restarted
+  
+# Reload Apache
+- name: reload apache
+  service: name=apache2 state=reloaded

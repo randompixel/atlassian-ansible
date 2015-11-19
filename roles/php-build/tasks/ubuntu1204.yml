@@ -1,0 +1,72 @@
+## Specific commands for Ubuntu 12.04LTS and older
+---
+- debug: msg = "Running commands for Ubuntu 12.04LTS"
+
+###### PHP APC #########
+# Enable PHP-APC
+- name: install APC (full)
+  apt: pkg=php-apc state=latest
+
+  ###### PHP OAUTH #########
+# Enable PHP OAuth
+- name: install build-tools
+  apt: pkg={{ item }} state=latest
+  with_items:
+      - make
+      - gcc
+      - autoconf
+      - libc-dev
+      - php5-dev
+      - libpcre3-dev
+      - libicu-dev
+      - libcurl3-dev
+      - build-essential
+
+- name: install OAuth via PECL
+  command: pecl install --alldeps oauth
+  ignore_errors: yes
+
+- name: create oauth configuration file
+  file: path=/etc/php5/cli/conf.d/oauth.ini state=touch mode=0644
+
+- name: update PHP configuration with OAuth
+  lineinfile:
+    dest=/etc/php5/cli/conf.d/oauth.ini
+    line="extension=oauth.so"
+
+# Note OAuth Capabilities
+- name: fetch oauth version
+  shell: "pecl info oauth | grep '^Release Version' | awk '{print $3}'"
+  register: oauth_version
+
+- name: set oauth version in capabilities
+  lineinfile:
+      dest={{ bamboo_node_capabilities }}
+      regexp="^PHP_OAUTH="
+      line='PHP_OAUTH={{ oauth_version.stdout }}'
+
+
+###### PHP INTL #########
+# Install PECL Intl with the "YES" command to select defaults
+- name: install Pecl Intl
+  command: printf "\n" | pecl install --alldeps intl
+  ignore_errors: yes
+
+- name: create intl configuration file
+  file: path=/etc/php5/cli/conf.d/intl.ini state=touch mode=0644
+
+- name: update intl configuration file
+  lineinfile:
+    dest=/etc/php5/cli/conf.d/intl.ini
+    line="extension=intl.so"
+
+# Note Intl Capabilities
+- name: fetch intl version
+  shell: pecl info intl | grep "^Release Version" | awk '{print $3}'
+  register: intl_version
+
+- name: set intl version in capabilities
+  lineinfile:
+      dest={{ bamboo_node_capabilities }}
+      regexp="^PHP_INTL="
+      line='PHP_INTL={{ intl_version.stdout }}'

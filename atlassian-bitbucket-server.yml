@@ -1,0 +1,6 @@
+## atlassian-bitbucket-server
+## Runs tasks to setup a Bitbucket instance
+---
+    - hosts: devtools-code
+      roles:
+          - atlassian-bitbucket-server

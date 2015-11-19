@@ -1,0 +1,9 @@
+## Runs tasks to setup Selenium Server and WebDrivers
+---
+    - hosts: selenium-servers-hosts
+      roles:
+          - selenium-server-host
+    - hosts: selenium-servers-nodes
+      roles: 
+          - selenium-server-node
+    

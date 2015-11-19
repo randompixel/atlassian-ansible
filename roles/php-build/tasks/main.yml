@@ -1,0 +1,94 @@
+## Setup the ability to run php scripts
+---
+# needed by apt_reposiroty
+- name: ensure software-properties-common is installed
+  apt: pkg=software-properties-common state=installed
+  when: "ansible_distribution_version | version_compare('14.04', '>=')"
+
+# add php 5.6 ppa
+- name: add ppa:ondrej/php5-5.6
+  apt_repository: repo=ppa:ondrej/php5-5.6 state=present
+  when: "ansible_distribution_version | version_compare('14.04', '>=')"
+
+# upgrade dependencies to php5.6
+- name: upgrade to PHP 5.6
+  apt: upgrade=safe update_cache=yes
+  when: "ansible_distribution_version | version_compare('14.04', '>=')"
+
+- name: install OpenSSL paths on PHP 5.6
+  template: src=openssl.ini.j2 dest=/etc/php5/mods-available/openssl.ini
+  notify: enable PHP5 openssl
+  when: "ansible_distribution_version | version_compare('14.04', '>=')"
+
+# file: roles/php-build/tasts/main.yml
+- name: install php-build packages
+  apt: pkg={{ item }} state=latest
+  with_items:
+      - php5-cli
+      - php-pear
+      - php5-curl
+      - php5-gd
+      - php5-geoip
+      - php5-mcrypt
+      - php5-memcache
+      - php5-memcached
+      - php5-mysql
+      - php5-xsl
+      - php5-ldap
+      - php5-xdebug
+      - php5-sqlite
+      - php5-imagick
+      # for triggering PHP Builds
+      - ant
+      # support modules
+      - memcached
+      - git
+      - gettext
+      - realpath
+      - imagemagick
+
+
+##### SETUP OS SPECIFIC VERSIONS
+- include: ubuntu1204.yml
+  when: "ansible_distribution_version | version_compare('14.04', '<')"
+
+- include: ubuntu.yml
+  when: "ansible_distribution_version | version_compare('14.04', '>=')"
+
+###### COMPOSER #########
+# Install composer (uses shell because of the |)
+- name: install composer
+  shell: curl -sS https://getcomposer.org/installer | php -- --filename=composer --install-dir=/usr/local/bin
+
+# Create groups here for sudo of composer in a minute
+- name: create bamboo group
+  group: name=bamboo1
+
+- name: create bamboo user
+  user: name=bamboo1 comment="Build Agent 1" shell=/bin/bash groups=bamboo1,www-data
+
+- name: set correct permissions on home directory
+  file: path=/home/bamboo1/ state=directory owner=bamboo1 group=bamboo1
+
+# Output Capabilities to temporary file for use on Bamboo Agents
+- name: fetch PHP Version
+  command: php -r "echo 'PHP_VERSION=' . PHP_MAJOR_VERSION . '.' . PHP_MINOR_VERSION . '.' . PHP_RELEASE_VERSION;"
+  register: php_version
+
+- name: set php version in capabilities
+  lineinfile:
+      dest={{ bamboo_node_capabilities }}
+      regexp="^PHP_VERSION="
+      line='{{ php_version.stdout }}'
+
+- name: noting other capabilities
+  lineinfile:
+      dest={{ bamboo_node_capabilities }}
+      regexp="{{ item.find }}"
+      line="{{ item.replace }}"
+      create=yes
+  with_items:
+      - { find: '^system.builder.command.Composer=', replace: 'system.builder.command.Composer=/usr/local/bin/composer' }
+      - { find: '^system.builder.command.PHP=', replace: 'system.builder.command.PHP=/usr/bin/php' }
+      - { find: '^system.builder.phpunit.PHPUnit=', replace: 'system.builder.phpunit.PHPUnit=/home/bamboo1/.composer/vendor/bin/phpunit' }
+      - { find: '^system.builder.ant.Ant=', replace: 'system.builder.ant.Ant=/usr/share/ant' }

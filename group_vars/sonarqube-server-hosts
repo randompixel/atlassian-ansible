@@ -1,0 +1,26 @@
+---
+# file: group_vars/sonarqube-server-hosts
+
+######## SONARQUBE
+
+# --- UPDATE ON UPGRADE ---
+sonarqube_version: "5.2"
+sonarqube_installer_archive: "sonarqube-5.2.zip"
+# Sonarqube Crowd Plugin - Check for updates here: http://update.sonarsource.org/plugins/crowd-confluence.html
+sonarqube_crowd_plugin_url: "http://downloads.sonarsource.com/plugins/org/codehaus/sonar-plugins/sonar-crowd-plugin/2.0/sonar-crowd-plugin-2.0.jar"
+# --- END UPDATE ON UPGRADE ---
+
+# Server Settings
+sonarqube_download_base: "https://sonarsource.bintray.com/Distribution/sonarqube/"
+sonarqube_home_directory: "/var/codehaus/application-data/sonarqube"
+sonarqube_app_directory: "/opt/codehaus/releases/sonarqube/"
+
+# Server Core Configuration
+sonarqube_database_user: "SET A DATABASE USER HERE"
+sonarqube_database_pass: "SET A DATABASE PASSWORD HERE"
+sonarqube_url_basename: "sonarqube.YOURDOMAIN.COM"
+
+# Crowd Configuration - These are configured within the Crowd webapp
+sonarqube_crowd_application: "CROWD_APPLICATION_NAME"
+sonarqube_crowd_password: "CROWD_APPLICATION_PASSWORD"
+sonarqube_crowd_realm: "CROWD_REALM"

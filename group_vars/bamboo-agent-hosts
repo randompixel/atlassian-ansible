@@ -1,0 +1,7 @@
+---
+# file: group_vars/bamboo-agent
+
+bamboo_url: http://bamboo.yourdomain.com
+bamboo_remote_agent_server: /agentServer/
+bamboo_remote_agent_path: /agentServer/agentInstaller/
+bamboo_remote_agent: atlassian-bamboo-agent-installer-5.9.7.jar

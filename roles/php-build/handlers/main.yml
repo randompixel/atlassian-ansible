@@ -1,0 +1,7 @@
+---
+# file: roles/php-build/handlers/main.yml
+
+# Enable PHP5 Openssl support in both Apache2 and CLI
+- name: enable PHP5 openssl
+  command: php5enmod openssl creates=/etc/php5/cli/conf.d/20-openssl.ini
+

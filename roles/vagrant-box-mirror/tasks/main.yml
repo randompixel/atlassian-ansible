@@ -1,0 +1,84 @@
+## Setup the ability to run a Vagrant Box mirror
+---
+# file: roles/vagrant-box-mirror/tasks/main.yml
+
+
+### INSTALL NEW VERSION
+
+# Make Home Directory
+- name: create vagrantbox group
+  group: name=vagrantbox
+
+- name: create vagrantbox user
+  user:
+    name=vagrantbox
+    comment="Vagrant Catalog Server User"
+    shell=/bin/bash
+    group=vagrantbox
+    generate_ssh_key=yes
+    system=yes
+
+
+# Clone Archive
+- name: download vagrant catalog
+  git:
+      repo={{ vagrant_catalog_github_url }}
+      dest=/var/www/{{ vagrant_hostname }}
+
+- name: create files directory
+  file: path=/var/www/{{ vagrant_hostname }}/files/{{ vagrant_directory }} state=directory
+
+- name: set file permissions correctly
+  file: path=/var/www/{{ vagrant_hostname }} owner=vagrantbox group=vagrantbox recurse=yes
+
+# Install composer (uses shell because of the |)
+- name: install PHP for Vagrant Box
+  apt: pkg={{ item }} state=latest
+  with_items:
+      - php5
+      - php5-curl
+
+- name: install composer
+  shell: curl -sS https://getcomposer.org/installer | php -- --filename=composer --install-dir=/usr/local/bin
+  args:
+     creates: /usr/local/bin/composer
+
+- name: install dependencies
+  command: composer install
+  args:
+    chdir: /var/www/{{ vagrant_hostname }}
+
+
+### UPDATE CONFIGURATION
+- name: copy default configuration
+  command: cp /var/www/{{ vagrant_hostname }}/config.php.dist /var/www/{{ vagrant_hostname }}/config.php
+  args:
+    creates: /var/www/{{ vagrant_hostname }}/config.php
+
+
+
+
+### START UP
+
+- name: Install Apache Web Server
+  apt: pkg={{ item }} state=latest
+  with_items:
+      - apache2
+
+- name: Enable mod_rewrite
+  apache2_module: state=present name={{ item }}
+  with_items:
+    - rewrite
+
+# Install Apache Proxy file into configuration and reload Apache
+- name: Apache | Install Virtual Host File
+  template: src=vagrantboxes.j2 dest=/etc/apache2/sites-available/{{ vagrant_hostname }}.conf
+
+- name: Apache | Virtualhost add | Activate virtual host
+  command: /usr/sbin/a2ensite {{ vagrant_hostname }} creates=/etc/apache2/sites-enabled/{{ vagrant_hostname }}
+  notify:
+    - reload apache
+
+
+### FINALISE
+# Manually place box and metadata files inside /files/ directory as per: https://github.com/vube/vagrant-catalog

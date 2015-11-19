@@ -1,0 +1,6 @@
+## atlassian-crowd-server.yml
+## Runs tasks to setup a Crowd instance
+---
+    - hosts: atlassian-crowd-server-hosts
+      roles:
+          - atlassian-crowd-server

@@ -1,0 +1,60 @@
+## Setup the ability to run a Atlassian Bitbucket Backup Client
+---
+# file: roles/atlassian-bitbucket-server/tasks/backup-client.yml
+
+
+### INSTALL NEW VERSION
+
+# Download Archive
+- name: download bitbucket archive installer
+  get_url:
+      url={{ bitbucket_backup_download_base }}{{ bitbucket_backup_installer_archive }}
+      dest=/tmp/{{ bitbucket_backup_installer_archive }}
+
+# Create Bitbucket Releases Directory
+- name: create global releases directory
+  file: path={{ atlassian_app_releases_directory }} state=directory
+
+- name: create bitbucket backup releases directory
+  file: path={{ bitbucket_backup_app_directory }} state=directory owner=bitbucket group=bitbucket
+
+# Unarchive Package
+- name: unpack bitbucket backup archive
+  unarchive:
+      copy=no
+      owner=bitbucket
+      group=bitbucket
+      mode=0750
+      src=/tmp/{{ bitbucket_backup_installer_archive }}
+      dest={{ bitbucket_backup_app_directory }}
+      creates={{ bitbucket_backup_app_directory }}/bitbucket-backup-client-{{ bitbucket_backup_version }}
+
+- name: set file permissions correctly
+  file: path={{ bitbucket_backup_app_directory }}/bitbucket-backup-client-{{ bitbucket_backup_version }} owner=bitbucket group=bitbucket recurse=yes
+
+- name: make stash backup client executable
+  file: path={{ bitbucket_backup_app_directory }}/bitbucket-backup-client-{{ bitbucket_backup_version }}/bitbucket-backup-client.jar mode=0755
+
+- name: make bitbucket restore client executable
+  file: path={{ bitbucket_backup_app_directory }}/bitbucket-backup-client-{{ bitbucket_backup_version }}/bitbucket-restore-client.jar mode=0755
+
+### Install Crontab file
+- name: install crontab file
+  template:
+       src=cron.bitbucket-backup.j2
+       dest=/etc/cron.d/bitbucket-backup
+
+### CLEAN UP
+# Remove Downloaded Archive
+- name: remove downloaded archives
+  file: state=absent path={{ item.path }}
+  with_items:
+      - { path: "/tmp/{{ bitbucket_backup_installer_archive }}" }
+
+# Keep only 2 releases (the current and previous)
+# Get all the directories newest first, remove the first 2 from the list (the 2 newest) and delete the rest
+- name: purge older releases
+  shell: "ls -td * | sed -e '1,2d' | xargs -r -d '\n' rm -r >> purge.log"
+  args:
+    chdir: "{{ bitbucket_backup_app_directory }}"
+
